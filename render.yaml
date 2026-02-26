@@ -5,12 +5,7 @@ services:
     rootDir: .
     plan: free
     autoDeploy: true
-    buildCommand: >-
-      npm install --ignore-scripts &&
-      cd "blinkstream-trader (Frontend)" &&
-      npm install --ignore-scripts &&
-      npm run build &&
-      cd ..
+    buildCommand: npm install --ignore-scripts && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:

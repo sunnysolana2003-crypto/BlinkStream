@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js"
+    "dev": "nodemon src/server.js",
+    "build": "npm install --ignore-scripts --prefix \"blinkstream-trader (Frontend)\" && npm run build --prefix \"blinkstream-trader (Frontend)\""
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.11.1",
