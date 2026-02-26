@@ -5,7 +5,7 @@ services:
     rootDir: .
     plan: free
     autoDeploy: true
-    buildCommand: npm install --ignore-scripts && npm run build
+    buildCommand: npm install --ignore-scripts && bash build.sh
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:

@@ -49,7 +49,7 @@ app.use("/api/blinks", apiLimiter, blinkRoutes);
 app.use("/api/demo", apiLimiter, demoRoutes);
 
 // Serve the built frontend from the unified dist folder
-const frontendDistPath = path.join(__dirname, "..", "blinkstream-trader (Frontend)", "dist");
+const frontendDistPath = path.join(__dirname, "..", "frontend", "dist");
 const frontendIndexPath = path.join(frontendDistPath, "index.html");
 const hasFrontendBuild = fs.existsSync(frontendIndexPath);
 
