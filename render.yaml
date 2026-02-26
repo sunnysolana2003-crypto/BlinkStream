@@ -1,0 +1,108 @@
+services:
+  - type: web
+    name: blinkstream-backend
+    runtime: node
+    rootDir: .
+    plan: free
+    autoDeploy: true
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "20.18.1"
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DEBUG
+        value: "false"
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: SOLANA_NETWORK
+        value: mainnet-beta
+      - key: ORBITFLARE_RPC_URL
+        value: http://fra.rpc.orbitflare.com
+      - key: ORBITFLARE_GRPC_URL
+        value: http://fra.rpc.orbitflare.com:10000
+      - key: ORBITFLARE_API_KEY
+        sync: false
+      - key: ORBITFLARE_TRADING_API_URL
+        sync: false
+      - key: ORBITFLARE_JUPITER_API_URL
+        sync: false
+      - key: PYTH_HERMES_URL
+        value: https://hermes.pyth.network
+      - key: JUPITER_API_URL
+        value: https://lite-api.jup.ag/swap/v1/quote
+      - key: BLINK_ACTION_URL
+        sync: false
+      - key: BLINK_WRAPPER_URL
+        value: https://dial.to
+      - key: BLINK_ICON_URL
+        value: https://solana.com/src/img/branding/solanaLogoMark.svg
+      - key: JUPITER_INPUT_MINT
+        value: So11111111111111111111111111111111111111112
+      - key: JUPITER_OUTPUT_MINT
+        value: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+      - key: DEFAULT_SWAP_AMOUNT
+        value: "100000000"
+      - key: DEFAULT_INPUT_DECIMALS
+        value: "9"
+      - key: HACKATHON_SIM_PUBLIC_KEY
+        sync: false
+      - key: SUPPORTED_TOKENS
+        value: SOL,USDC,BONK,JUP
+      - key: AUTONOMOUS_TOKENS
+        value: SOL,BONK,JUP
+      - key: TOKEN_MINT_MAP
+        value: ""
+      - key: TOKEN_DECIMALS_MAP
+        value: ""
+      - key: LARGE_SWAP_USD_THRESHOLD
+        value: "10000"
+      - key: SURGE_THRESHOLD_PERCENT
+        value: "3"
+      - key: SURGE_COOLDOWN_MS
+        value: "30000"
+      - key: AUTONOMOUS_POLL_MS
+        value: "5000"
+      - key: STREAM_RECONNECT_MS
+        value: "3000"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: HACKATHON_AUTH_TOKEN
+        sync: false
+      - key: DEMO_MODE
+        value: "false"
+
+  - type: static
+    name: blinkstream-frontend
+    rootDir: "blinkstream-trader (Frontend)"
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        sync: false
+      - key: VITE_SOCKET_URL
+        sync: false
+      - key: NODE_VERSION
+        value: "20.18.1"
