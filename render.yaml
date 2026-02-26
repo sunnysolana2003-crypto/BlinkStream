@@ -1,11 +1,16 @@
 services:
   - type: web
-    name: blinkstream-backend
+    name: blinkstream
     runtime: node
     rootDir: .
     plan: free
     autoDeploy: true
-    buildCommand: npm install --ignore-scripts
+    buildCommand: >-
+      npm install --ignore-scripts &&
+      cd "blinkstream-trader (Frontend)" &&
+      npm install --ignore-scripts &&
+      npm run build &&
+      cd ..
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
@@ -79,30 +84,3 @@ services:
         sync: false
       - key: DEMO_MODE
         value: "false"
-
-  - type: static
-    name: blinkstream-frontend
-    rootDir: "blinkstream-trader (Frontend)"
-    buildCommand: npm install --ignore-scripts && npm run build
-    staticPublishPath: dist
-    headers:
-      - path: /*
-        name: X-Frame-Options
-        value: SAMEORIGIN
-      - path: /*
-        name: X-Content-Type-Options
-        value: nosniff
-      - path: /*
-        name: Referrer-Policy
-        value: strict-origin-when-cross-origin
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
-      - key: VITE_API_URL
-        sync: false
-      - key: VITE_SOCKET_URL
-        sync: false
-      - key: NODE_VERSION
-        value: "20.18.1"

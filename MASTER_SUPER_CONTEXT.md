@@ -24,6 +24,7 @@ blinkstream-unified-backend/
 ├── src/                                  # Backend runtime
 ├── blinkstream-trader (Frontend)/        # Frontend runtime
 ├── .env.example                          # Backend env template
+├── render.yaml                           # Render Deployment Blueprint
 ├── UNIFIED_CODEBASE_GUIDE.md             # Backend architecture write-up
 ├── MASTER_SUPER_CONTEXT.md               # This file
 └── README.md
@@ -92,6 +93,9 @@ blinkstream-unified-backend/
   - event normalization
   - metrics retrieval
   - optional event persistence
+- `src/services/tokenRegistry.service.js`
+  - Mint address to human-readable symbol resolution via Jupiter Token List API
+  - local LRU / map caching
 - `src/routes/health.routes.js`
   - health snapshot + stream status
 - `src/routes/auth.routes.js`
@@ -121,28 +125,38 @@ Frontend root:
   - centralized API base URL config
 - `src/lib/socket.ts`
   - socket.io-client instance
+- `src/lib/tokenNames.ts`
+  - local cache and backend async resolution logic for converting Mint addresses to Symbols
 - `src/types/backend.ts`
   - shared event/metrics/blink types
 - `src/App.tsx`
   - API polling
   - socket subscriptions
   - demo trigger wiring
+  - token display name resolution state (`tokenDisplayNames`)
   - centralized error handling UI
 - `src/components/TradingPanel.tsx`
   - receives live price/metrics/blink props
+  - supports Mint address lookups
 - `src/components/BlinkForm.tsx`
   - calls backend blink generate
   - displays latency + URL
 - `src/components/EventStream.tsx`
   - shows live `surge`/`large-swap` feed
   - triggers demo surge action
+  - Uses `tokenDisplayNames` for human readable logging
 - `src/components/SurgeAlert.tsx`
   - animated surge alert
   - latency bar animation per stage
+  - Displays readable token names instead of raw mints
 - `src/components/LatencyMetrics.tsx`
   - renders rpc latency, blink total, slot/network
 - `src/components/TopBar.tsx`
   - network/rpc/demo badge/logout display
+- `src/components/OrbitflareExplorer.tsx`
+  - Trader Intelligence Hub (Network Velocity, Execution Fidelity, Trade Cost Index)
+  - Surge Settings Configurator and Autonomous Watchlist manager
+
 
 ---
 
@@ -210,6 +224,7 @@ These invariants must stay true unless intentionally versioned:
 - `POST /api/blinks/generate`
 - `POST /api/demo/trigger`
 - `GET /api/health`
+- `GET /api/metrics/resolve-token?token=...`
 
 Note:
 
