@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const fs = require("fs");
 const rateLimit = require("express-rate-limit");
 const { ACTIONS_CORS_HEADERS } = require("@solana/actions");
 
@@ -10,6 +11,7 @@ const blinkRoutes = require("./routes/blink.routes");
 const demoRoutes = require("./routes/demo.routes");
 const healthRoutes = require("./routes/health.routes");
 const errorMiddleware = require("./middleware/error.middleware");
+const logger = require("./utils/logger");
 
 const app = express();
 
@@ -48,11 +50,24 @@ app.use("/api/demo", apiLimiter, demoRoutes);
 
 // Serve the built frontend from the unified dist folder
 const frontendDistPath = path.join(__dirname, "..", "blinkstream-trader (Frontend)", "dist");
-app.use(express.static(frontendDistPath));
+const frontendIndexPath = path.join(frontendDistPath, "index.html");
+const hasFrontendBuild = fs.existsSync(frontendIndexPath);
+
+if (hasFrontendBuild) {
+  app.use(express.static(frontendDistPath));
+} else {
+  logger.warn(`Frontend build not found at ${frontendIndexPath}. Serving API-only mode.`);
+}
 
 // Catch-all: serve index.html for all non-API routes (React client-side routing)
 app.get(/^(?!\/api).*/, (req, res) => {
-  res.sendFile(path.join(frontendDistPath, "index.html"));
+  if (!hasFrontendBuild) {
+    return res.status(503).json({
+      error: "Frontend build not found. Run frontend build and redeploy."
+    });
+  }
+
+  return res.sendFile(frontendIndexPath);
 });
 
 app.use(errorMiddleware);
