@@ -5,7 +5,7 @@ services:
     rootDir: .
     plan: free
     autoDeploy: true
-    buildCommand: npm ci
+    buildCommand: npm install --ignore-scripts
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
@@ -83,7 +83,7 @@ services:
   - type: static
     name: blinkstream-frontend
     rootDir: "blinkstream-trader (Frontend)"
-    buildCommand: npm ci && npm run build
+    buildCommand: npm install --ignore-scripts && npm run build
     staticPublishPath: dist
     headers:
       - path: /*
