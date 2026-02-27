@@ -23,9 +23,13 @@ import {
   ExternalLink,
   ShieldCheck,
   AlertCircle,
-  Clock
+  Clock,
+  Waves,
+  Flame,
 } from "lucide-react";
 import api from "../lib/api";
+import { WhaleStream } from "./WhaleStream";
+import { PriorityOptimizer } from "./PriorityOptimizer";
 import {
   BackendEvent,
   BlinkLatency,
@@ -110,9 +114,8 @@ export function OrbitflareExplorer({
   events,
   connectedWallet
 }: OrbitflareExplorerProps) {
-  const [activeTab, setActiveTab] = useState<"overview" | "portfolio" | "inspector" | "settings">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "portfolio" | "whalestream" | "priorityfees" | "inspector" | "settings">("overview");
   const [chainPulse, setChainPulse] = useState<OrbitflareChainPulse | null>(null);
-  const [advancedProbe, setAdvancedProbe] = useState<OrbitflareAdvancedProbe | null>(null);
   const [loadingChain, setLoadingChain] = useState(false);
 
   // Portfolio state
@@ -187,17 +190,17 @@ export function OrbitflareExplorer({
               <p className="text-[10px] text-gray-500 font-mono">POWERED BY ORBITFLARE HIGH-FIDELITY RPC</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {["overview", "portfolio", "inspector", "settings"].map((tab) => (
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 no-scrollbar">
+            {["overview", "portfolio", "whalestream", "priorityfees", "inspector", "settings"].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab as any)}
-                className={`px-4 py-2 rounded-xl text-[10px] font-bold tracking-widest transition-all ${activeTab === tab
+                className={`px-4 py-2 rounded-xl text-[10px] font-bold tracking-widest transition-all whitespace-nowrap ${activeTab === tab
                   ? "bg-[#00f3ff]/10 border border-[#00f3ff]/40 text-[#00f3ff]"
-                  : "bg-white/5 border border-white/5 text-gray-500 hover:text-white"
+                  : "bg-white/5 border border-white/5 text-gray-400 hover:text-white"
                   }`}
               >
-                {tab.toUpperCase()}
+                {tab.replace("-", " ").toUpperCase()}
               </button>
             ))}
           </div>
@@ -249,60 +252,51 @@ export function OrbitflareExplorer({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="grid grid-cols-1 lg:grid-cols-2 gap-6"
+            className="flex flex-col gap-6"
           >
             <div className="glass-panel rounded-3xl p-6">
-              <h3 className="text-xs font-bold tracking-widest text-[#bc13fe] mb-4 flex items-center gap-2">
-                <TrendingUp className="w-4 h-4" />
-                AUTONOMOUS WATCHLIST
-              </h3>
-              <div className="flex gap-2 mb-4">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xs font-bold tracking-widest text-[#bc13fe] flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4" />
+                  AUTONOMOUS WATCHLIST
+                </h3>
+                <div className="px-3 py-1 rounded-full bg-[#bc13fe]/10 border border-[#bc13fe]/20 text-[10px] font-bold text-[#bc13fe]">
+                  {supportedTokens.length} ASSETS TRACKED
+                </div>
+              </div>
+
+              <div className="relative mb-6">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <input
                   disabled={addingWatchToken}
-                  placeholder="Token Symbol or Mint..."
+                  placeholder="Scan new token symbol or mint address..."
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       onRegisterAutonomousToken(e.currentTarget.value);
                       e.currentTarget.value = "";
                     }
                   }}
-                  className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-sm font-mono text-white outline-none focus:border-[#bc13fe]/50"
+                  className="w-full bg-black/40 border border-white/10 rounded-2xl pl-12 pr-4 py-3 text-sm font-mono text-white outline-none focus:border-[#bc13fe]/50 transition-all"
                 />
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {supportedTokens.map(token => (
-                  <div key={token} className="p-3 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between">
-                    <span className="text-xs font-mono font-bold text-white">{token}</span>
-                    <div className="w-1.5 h-1.5 rounded-full bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.6)]" />
-                  </div>
-                ))}
-              </div>
-            </div>
 
-            <div className="glass-panel rounded-3xl p-6">
-              <h3 className="text-xs font-bold tracking-widest text-[#ff6a00] mb-4 flex items-center gap-2">
-                <BarChart3 className="w-4 h-4" />
-                EXECUTION ANALYTICS
-              </h3>
-              <div className="space-y-4 pt-2">
-                {[
-                  { label: "Jupiter Quote + Swap", color: "bg-cyan-400", latency: latestLatency.quoteLatency },
-                  { label: "Transaction Simulation", color: "bg-purple-500", latency: latestLatency.simulationLatency },
-                  { label: "Blink Payload Gen", color: "bg-orange-400", latency: latestLatency.blinkLatency },
-                ].map(segment => (
-                  <div key={segment.label} className="space-y-1.5">
-                    <div className="flex justify-between text-[10px] font-mono">
-                      <span className="text-gray-400">{segment.label.toUpperCase()}</span>
-                      <span className="text-white font-bold">{segment.latency.toFixed(1)}ms</span>
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                {supportedTokens.map(token => (
+                  <motion.div
+                    key={token}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="p-4 rounded-2xl bg-white/5 border border-white/5 flex flex-col items-center gap-2 hover:bg-white/10 transition-all cursor-pointer group"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-black/40 border border-white/10 flex items-center justify-center font-bold text-xs text-white group-hover:text-[#bc13fe]">
+                      {token[0]}
                     </div>
-                    <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(segment.latency / (latestLatency.total || 1)) * 100}%` }}
-                        className={`h-full ${segment.color}`}
-                      />
+                    <span className="text-[10px] font-mono font-bold text-gray-300 uppercase tracking-widest">{token}</span>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.6)]" />
+                      <span className="text-[8px] font-bold text-green-400/70">ACTIVE</span>
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             </div>
@@ -392,6 +386,32 @@ export function OrbitflareExplorer({
                 </div>
               </div>
             )}
+          </motion.div>
+        )}
+
+        {/* WHALE STREAM TAB */}
+        {activeTab === "whalestream" && (
+          <motion.div
+            key="whalestream"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            className="flex-1 min-h-[600px]"
+          >
+            <WhaleStream />
+          </motion.div>
+        )}
+
+        {/* PRIORITY FEES TAB */}
+        {activeTab === "priorityfees" && (
+          <motion.div
+            key="priorityfees"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            className="flex-1 min-h-[600px]"
+          >
+            <PriorityOptimizer />
           </motion.div>
         )}
 

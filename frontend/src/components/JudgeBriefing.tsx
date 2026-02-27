@@ -17,8 +17,7 @@ import {
 import {
   BackendEvent,
   BlinkLatency,
-  MetricsPayload,
-  OrbitflareUsagePayload
+  MetricsPayload
 } from "../types/backend";
 
 interface JudgeBriefingProps {
@@ -29,7 +28,6 @@ interface JudgeBriefingProps {
   price: number;
   token: string;
   healthSnapshot: Record<string, unknown> | null;
-  orbitflareUsage: OrbitflareUsagePayload | null;
 }
 
 function formatTimestamp(timestamp: number) {
@@ -49,8 +47,7 @@ export function JudgeBriefing({
   latestBlinkLatency,
   price,
   token,
-  healthSnapshot,
-  orbitflareUsage
+  healthSnapshot
 }: JudgeBriefingProps) {
   const latestEvent = events[0] || null;
 
@@ -81,54 +78,6 @@ export function JudgeBriefing({
       backfillError: String(backfill?.lastError || "")
     };
   }, [healthSnapshot]);
-  const wsSnapshot = useMemo(() => {
-    const websocket =
-      orbitflareUsage && typeof orbitflareUsage.websocket === "object" && orbitflareUsage.websocket
-        ? orbitflareUsage.websocket
-        : null;
-
-    const total = toNumber(websocket?.probeCount, 0);
-    const success = toNumber(websocket?.successCount, 0);
-    const successRate = total > 0 ? Number(((success / total) * 100).toFixed(1)) : null;
-    const lastProbe = websocket?.lastProbe || null;
-
-    return {
-      probeCount: total,
-      successCount: success,
-      failureCount: toNumber(websocket?.failureCount, 0),
-      successRate,
-      lastProbeSuccess: Boolean(lastProbe?.overallSuccess),
-      lastProbeDurationMs: toNumber(lastProbe?.durationMs, 0)
-    };
-  }, [orbitflareUsage]);
-  const relaySnapshot = useMemo(() => {
-    const submissions =
-      orbitflareUsage && typeof orbitflareUsage.submissions === "object" && orbitflareUsage.submissions
-        ? orbitflareUsage.submissions
-        : null;
-
-    const total = toNumber(submissions?.total, 0);
-    const success = toNumber(submissions?.success, 0);
-    const successRate = total > 0 ? Number(((success / total) * 100).toFixed(1)) : null;
-
-    return {
-      total,
-      success,
-      failure: toNumber(submissions?.failure, 0),
-      successRate
-    };
-  }, [orbitflareUsage]);
-  const advancedSnapshot = useMemo(() => {
-    const probe =
-      orbitflareUsage && typeof orbitflareUsage.lastAdvancedProbe === "object" && orbitflareUsage.lastAdvancedProbe
-        ? orbitflareUsage.lastAdvancedProbe
-        : null;
-
-    return {
-      successCount: toNumber(probe?.successCount, 0),
-      failureCount: toNumber(probe?.failureCount, 0)
-    };
-  }, [orbitflareUsage]);
   const opsSnapshot = useMemo(() => {
     const orbitflareOps =
       healthSnapshot && typeof healthSnapshot.orbitflareOps === "object" && healthSnapshot.orbitflareOps
@@ -146,10 +95,6 @@ export function JudgeBriefing({
     };
   }, [healthSnapshot]);
 
-  const topOrbitflareMethods = useMemo(() => {
-    const methods = Array.isArray(orbitflareUsage?.methods) ? orbitflareUsage.methods : [];
-    return [...methods].sort((left, right) => right.totalCalls - left.totalCalls).slice(0, 6);
-  }, [orbitflareUsage]);
   const scoreSnapshot =
     healthSnapshot && typeof healthSnapshot.orbitflareScore === "object"
       ? (healthSnapshot.orbitflareScore as Record<string, unknown>)
@@ -227,18 +172,6 @@ export function JudgeBriefing({
             accent: "text-[#ffb37d]"
           },
           {
-            label: "WS Probe Success",
-            value: wsSnapshot.successRate !== null ? `${wsSnapshot.successRate}%` : "N/A",
-            icon: Radio,
-            accent: "text-[#8cf8ff]"
-          },
-          {
-            label: "Tx Relay Success",
-            value: relaySnapshot.successRate !== null ? `${relaySnapshot.successRate}%` : "N/A",
-            icon: Send,
-            accent: "text-[#ffb37d]"
-          },
-          {
             label: "Ops Monitor",
             value: opsSnapshot.monitorRunning ? "RUNNING" : "STOPPED",
             icon: ShieldCheck,
@@ -297,18 +230,6 @@ export function JudgeBriefing({
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono mb-4">
             <div className="rounded-lg border border-white/10 bg-black/30 p-3">
-              <div className="text-gray-400 mb-1">TOTAL RPC CALLS</div>
-              <div className="text-[#00f3ff] text-base">{orbitflareUsage?.totalCalls ?? 0}</div>
-            </div>
-            <div className="rounded-lg border border-white/10 bg-black/30 p-3">
-              <div className="text-gray-400 mb-1">RPC SUCCESS RATE</div>
-              <div className="text-[#00f3ff] text-base">
-                {orbitflareUsage?.successRate !== null && orbitflareUsage?.successRate !== undefined
-                  ? `${orbitflareUsage.successRate}%`
-                  : "N/A"}
-              </div>
-            </div>
-            <div className="rounded-lg border border-white/10 bg-black/30 p-3">
               <div className="text-gray-400 mb-1">STREAM FILTER MODE</div>
               <div className="text-[#ffb37d] text-base">{streamSnapshot.filterMode.toUpperCase()}</div>
             </div>
@@ -325,38 +246,9 @@ export function JudgeBriefing({
               <div className="text-[#bc13fe] text-base">{streamSnapshot.backfillRecovered}</div>
             </div>
             <div className="rounded-lg border border-white/10 bg-black/30 p-3">
-              <div className="text-gray-400 mb-1">WS PROBES</div>
-              <div className="text-[#8cf8ff] text-base">{wsSnapshot.probeCount}</div>
-            </div>
-            <div className="rounded-lg border border-white/10 bg-black/30 p-3">
-              <div className="text-gray-400 mb-1">TX RELAYS</div>
-              <div className="text-[#ffb37d] text-base">{relaySnapshot.total}</div>
-            </div>
-            <div className="rounded-lg border border-white/10 bg-black/30 p-3">
-              <div className="text-gray-400 mb-1">ADVANCED PROBE</div>
-              <div className="text-[#d59bff] text-base">
-                {advancedSnapshot.successCount}/{advancedSnapshot.successCount + advancedSnapshot.failureCount}
-              </div>
-            </div>
-            <div className="rounded-lg border border-white/10 bg-black/30 p-3">
               <div className="text-gray-400 mb-1">OPS MONITOR RUNS</div>
               <div className="text-[#00f3ff] text-base">{opsSnapshot.monitorRuns}</div>
             </div>
-          </div>
-
-          <div className="space-y-2 text-xs font-mono">
-            {topOrbitflareMethods.length ? (
-              topOrbitflareMethods.map((method) => (
-                <div key={method.method} className="flex items-center justify-between rounded-lg border border-white/10 bg-black/30 p-2.5">
-                  <span className="text-gray-200">{method.method}</span>
-                  <span className="text-[#00f3ff]">{method.totalCalls} calls</span>
-                </div>
-              ))
-            ) : (
-              <div className="rounded-lg border border-white/10 bg-black/30 p-2.5 text-gray-500">
-                No OrbitFlare RPC method stats yet. Trigger stream or probe to populate.
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -434,13 +326,11 @@ export function JudgeBriefing({
               <div className="text-[#00f3ff] mb-2">HTTP Endpoints</div>
               <div className="space-y-1 text-gray-300">
                 <div>GET /api/metrics</div>
-                <div>GET /api/metrics/orbitflare/usage</div>
-                <div>POST /api/metrics/orbitflare/probe</div>
-                <div>POST /api/metrics/orbitflare/websocket/probe</div>
-                <div>POST /api/metrics/orbitflare/advanced/probe</div>
-                <div>POST /api/metrics/orbitflare/tx-submit</div>
+                <div>GET /api/metrics/surge-settings</div>
                 <div>GET /api/metrics/autonomous-tokens</div>
                 <div>POST /api/metrics/autonomous-tokens</div>
+                <div>GET /api/metrics/whale/history</div>
+                <div>GET /api/metrics/priority-fees</div>
                 <div>GET /api/price?token=&lt;symbol|mint&gt;</div>
                 <div>POST /api/blinks</div>
                 <div>GET /api/blinks</div>

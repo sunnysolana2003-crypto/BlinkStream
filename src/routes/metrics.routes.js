@@ -6,22 +6,8 @@ const {
   updateSurgeSettings
 } = require("../services/surgeEngine.service");
 const {
-  runOrbitFlareProbe,
-  getOrbitFlareUsageSnapshot,
-  runOrbitFlareAdvancedProbe,
-  runOrbitFlareWebsocketProbe,
-  submitOrbitFlareSignedTransaction,
-  getOrbitFlareWebsocketSnapshot,
-  getOrbitFlareWalletSnapshot,
-  getOrbitFlareChainPulse,
-  getOrbitFlareTxReplay
+  getOrbitFlareChainPulse
 } = require("../services/orbitflareRpc.service");
-const {
-  runOrbitFlareOpsProbe,
-  getOrbitFlareOpsSnapshot,
-  getOpsMonitorStatus
-} = require("../services/orbitflareOps.service");
-const { buildOrbitFlareUtilizationScore } = require("../services/orbitflareScore.service");
 const { getStreamStatus } = require("../jobs/stream.job");
 const {
   getAutonomousTokens,
@@ -143,69 +129,6 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-router.get("/orbitflare/usage", async (req, res, next) => {
-  try {
-    return res.json(getOrbitFlareUsageSnapshot());
-  } catch (error) {
-    return next(error);
-  }
-});
-
-router.post("/orbitflare/probe", async (req, res, next) => {
-  try {
-    const timeoutMs = Number(req.body?.timeoutMs || req.query?.timeoutMs || 4000);
-    const probe = await runOrbitFlareProbe({ timeoutMs });
-    return res.json({ success: true, probe });
-  } catch (error) {
-    return next(error);
-  }
-});
-
-router.get("/orbitflare/advanced", async (req, res, next) => {
-  try {
-    const usage = getOrbitFlareUsageSnapshot();
-    const shouldRefresh = String(req.query.refresh || "").toLowerCase() === "true";
-
-    if (shouldRefresh || !usage.lastAdvancedProbe) {
-      const timeoutMs = Number(req.query.timeoutMs || 5000);
-      const probe = await runOrbitFlareAdvancedProbe({ timeoutMs });
-      return res.json(probe);
-    }
-
-    return res.json(usage.lastAdvancedProbe);
-  } catch (error) {
-    return next(error);
-  }
-});
-
-router.post("/orbitflare/advanced/probe", async (req, res, next) => {
-  try {
-    const timeoutMs = Number(req.body?.timeoutMs || req.query?.timeoutMs || 5000);
-    const probe = await runOrbitFlareAdvancedProbe({ timeoutMs });
-    return res.json({ success: true, probe });
-  } catch (error) {
-    return next(error);
-  }
-});
-
-router.get("/orbitflare/websocket", async (req, res, next) => {
-  try {
-    return res.json(getOrbitFlareWebsocketSnapshot());
-  } catch (error) {
-    return next(error);
-  }
-});
-
-router.post("/orbitflare/websocket/probe", async (req, res, next) => {
-  try {
-    const listenMs = Number(req.body?.listenMs || req.query?.listenMs || 3000);
-    const probe = await runOrbitFlareWebsocketProbe({ listenMs });
-    return res.json({ success: true, probe });
-  } catch (error) {
-    return next(error);
-  }
-});
-
 router.get("/wallet/pnl", async (req, res, next) => {
   try {
     const address = resolveValidatedAddress(req.query.address);
@@ -229,103 +152,11 @@ router.get("/tx/inspect", async (req, res, next) => {
   }
 });
 
-router.get("/orbitflare/wallet", async (req, res, next) => {
-  try {
-    const address = resolveValidatedAddress(req.query.address);
-    const tokenLimit = Number(req.query.tokenLimit || 50);
-    const signatureLimit = Number(req.query.signatureLimit || 8);
-    const timeoutMs = Number(req.query.timeoutMs || 4000);
-    const payload = await getOrbitFlareWalletSnapshot({
-      address,
-      tokenLimit,
-      signatureLimit,
-      timeoutMs
-    });
-    return res.json(payload);
-  } catch (error) {
-    return next(error);
-  }
-});
-
 router.get("/orbitflare/chain-pulse", async (req, res, next) => {
   try {
     const timeoutMs = Number(req.query.timeoutMs || 4000);
     const payload = await getOrbitFlareChainPulse({ timeoutMs });
     return res.json(payload);
-  } catch (error) {
-    return next(error);
-  }
-});
-
-router.get("/orbitflare/tx-replay", async (req, res, next) => {
-  try {
-    const address = resolveValidatedAddress(req.query.address);
-    const limit = Number(req.query.limit || 10);
-    const timeoutMs = Number(req.query.timeoutMs || 5000);
-    const before = String(req.query.before || "");
-    const until = String(req.query.until || "");
-    const payload = await getOrbitFlareTxReplay({
-      address,
-      limit,
-      timeoutMs,
-      before,
-      until
-    });
-    return res.json(payload);
-  } catch (error) {
-    return next(error);
-  }
-});
-
-router.get("/orbitflare/ops", async (req, res, next) => {
-  try {
-    return res.json(getOrbitFlareOpsSnapshot());
-  } catch (error) {
-    return next(error);
-  }
-});
-
-router.post("/orbitflare/ops/probe", async (req, res, next) => {
-  try {
-    const timeoutMs = Number(req.body?.timeoutMs || req.query?.timeoutMs || 5000);
-    const probe = await runOrbitFlareOpsProbe({ timeoutMs });
-    return res.json({ success: true, probe });
-  } catch (error) {
-    return next(error);
-  }
-});
-
-router.get("/orbitflare/score", async (req, res, next) => {
-  try {
-    const usage = getOrbitFlareUsageSnapshot();
-    const stream = getStreamStatus();
-    const opsSnapshot = getOrbitFlareOpsSnapshot();
-    const score = buildOrbitFlareUtilizationScore({
-      usage,
-      stream,
-      opsSnapshot
-    });
-
-    return res.json({
-      score,
-      usageSummary: {
-        totalCalls: usage.totalCalls,
-        successRate: usage.successRate,
-        methodCount: Array.isArray(usage.methods) ? usage.methods.length : 0
-      },
-      streamSummary: {
-        connected: Boolean(stream.connected),
-        reconnectCount: Number(stream.reconnectCount || 0),
-        filterMode: String(stream.filterMode || "unknown")
-      },
-      websocketSummary: usage.websocket || null,
-      submissionSummary: usage.submissions || null,
-      opsSummary: {
-        configured: Boolean(opsSnapshot.configured),
-        monitor: getOpsMonitorStatus(),
-        guardrails: opsSnapshot.lastProbe?.guardrails || null
-      }
-    });
   } catch (error) {
     return next(error);
   }

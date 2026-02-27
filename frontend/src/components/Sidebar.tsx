@@ -18,8 +18,6 @@ const navItems = [
   { id: "nodes", icon: Layers, label: "Node Topology" },
   { id: "history", icon: History, label: "Event Log" },
   { id: "terminal", icon: TerminalSquare, label: "Trader Hub" },
-  { id: "whalestream", icon: Waves, label: "Whale Stream" },
-  { id: "priorityfees", icon: Flame, label: "Priority Fees" },
   { id: "rugcheck", icon: ShieldAlert, label: "Rug Checker" },
   { id: "settings", icon: Settings, label: "System Config" },
 ];

@@ -228,12 +228,10 @@ export default function App() {
   const [judgeMode, setJudgeMode] = useState(false);
   const [activeSection, setActiveSection] = useState("dashboard");
   const [healthSnapshot, setHealthSnapshot] = useState<Record<string, unknown> | null>(null);
-  const [orbitflareUsage, setOrbitflareUsage] = useState<OrbitflareUsagePayload | null>(null);
   const [surgeThresholdInput, setSurgeThresholdInput] = useState("3");
   const [surgeCooldownInput, setSurgeCooldownInput] = useState("30000");
   const [savingSurgeSettings, setSavingSurgeSettings] = useState(false);
   const [surgeSettingsSaved, setSurgeSettingsSaved] = useState(false);
-  const [runningOrbitflareProbe, setRunningOrbitflareProbe] = useState(false);
   const [addingWatchToken, setAddingWatchToken] = useState(false);
   const [watchTokenSaved, setWatchTokenSaved] = useState<string | null>(null);
   const [tokenDisplayNames, setTokenDisplayNames] = useState<Record<string, string>>({});
@@ -438,17 +436,6 @@ export default function App() {
     }
   }, [handleApiError]);
 
-  const refreshOrbitflareUsage = useCallback(async () => {
-    try {
-      const response = await api.get("/metrics/orbitflare/usage");
-      if (typeof response.data === "object" && response.data) {
-        setOrbitflareUsage(response.data as OrbitflareUsagePayload);
-      }
-    } catch (error) {
-      handleApiError(error);
-    }
-  }, [handleApiError]);
-
   const refreshAutonomousTokens = useCallback(async () => {
     try {
       const response = await api.get("/metrics/autonomous-tokens");
@@ -541,15 +528,6 @@ export default function App() {
   useEffect(() => {
     void refreshSurgeSettings();
   }, [refreshSurgeSettings]);
-
-  useEffect(() => {
-    void refreshOrbitflareUsage();
-    const interval = window.setInterval(refreshOrbitflareUsage, 10000);
-
-    return () => {
-      window.clearInterval(interval);
-    };
-  }, [refreshOrbitflareUsage]);
 
   useEffect(() => {
     void refreshAutonomousTokens();
@@ -725,19 +703,6 @@ export default function App() {
     }
   }, [handleApiError, showGlitchError, surgeCooldownInput, surgeThresholdInput]);
 
-  const runOrbitflareProbe = useCallback(async () => {
-    setRunningOrbitflareProbe(true);
-
-    try {
-      await api.post("/metrics/orbitflare/probe", { timeoutMs: 4500 });
-      await Promise.all([refreshOrbitflareUsage(), refreshHealth()]);
-    } catch (error) {
-      handleApiError(error);
-    } finally {
-      setRunningOrbitflareProbe(false);
-    }
-  }, [handleApiError, refreshHealth, refreshOrbitflareUsage]);
-
   const latestLatency = useMemo(() => blinkLatency || ZERO_LATENCY, [blinkLatency]);
 
   return (
@@ -793,14 +758,6 @@ export default function App() {
           ) : activeSection === "rugcheck" ? (
             <motion.div variants={itemVariants} className="flex-1 min-w-0 overflow-y-auto pr-2">
               <RugCheck />
-            </motion.div>
-          ) : activeSection === "whalestream" ? (
-            <motion.div variants={itemVariants} className="flex-1 min-w-0 overflow-y-auto pr-2">
-              <WhaleStream />
-            </motion.div>
-          ) : activeSection === "priorityfees" ? (
-            <motion.div variants={itemVariants} className="flex-1 min-w-0 overflow-y-auto pr-2">
-              <PriorityOptimizer />
             </motion.div>
           ) : activeSection === "settings" ? (
             <motion.div variants={itemVariants} className="flex-1 min-w-0 overflow-y-auto pr-2">
@@ -878,18 +835,25 @@ export default function App() {
                       >
                         {judgeMode ? "DISABLE JUDGE MODE" : "ENABLE JUDGE MODE"}
                       </button>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => void saveSurgeSettings()}
+                          disabled={savingSurgeSettings}
+                          className="rounded-lg border border-[#00f3ff]/50 bg-[#00f3ff]/10 px-4 py-2 text-xs font-bold tracking-widest text-[#00f3ff] hover:bg-[#00f3ff]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {savingSurgeSettings ? "SAVING..." : "SAVE SURGE SETTINGS"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-white/15 bg-black/30 p-4">
+                    <div className="text-xs font-bold tracking-widest text-[#ff6a00] mb-3">SYSTEM ACTIONS</div>
+                    <div className="flex flex-wrap gap-2">
                       <button
-                        onClick={() => void refreshHealth()}
-                        className="rounded-xl border border-white/20 bg-black/40 px-4 py-3 text-sm font-bold tracking-widest hover:border-[#ff6a00]/50 hover:text-[#ff6a00] transition-colors"
+                        onClick={handleResetView}
+                        className="rounded-xl border border-white/20 bg-black/40 px-4 py-3 text-sm font-bold tracking-widest hover:border-white/50 transition-colors uppercase"
                       >
-                        REFRESH HEALTH
-                      </button>
-                      <button
-                        onClick={() => void runOrbitflareProbe()}
-                        disabled={runningOrbitflareProbe}
-                        className="rounded-xl border border-[#00f3ff]/40 bg-[#00f3ff]/10 px-4 py-3 text-sm font-bold tracking-widest text-[#8cf8ff] hover:bg-[#00f3ff]/20 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                      >
-                        {runningOrbitflareProbe ? "RUNNING ORBITFLARE PROBE..." : "RUN ORBITFLARE PROBE"}
+                        CLEAR FEEDS
                       </button>
                     </div>
                   </div>
@@ -906,7 +870,6 @@ export default function App() {
                 price={price}
                 token={selectedToken}
                 healthSnapshot={healthSnapshot}
-                orbitflareUsage={orbitflareUsage}
               />
             </motion.div>
           ) : (
