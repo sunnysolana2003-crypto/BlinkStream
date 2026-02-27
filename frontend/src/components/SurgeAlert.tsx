@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { AlertTriangle, Zap, X, Activity } from "lucide-react";
 import { AnimatedCounter } from "./AnimatedCounter";
 import { BlinkLatency } from "../types/backend";
-import { openBlinkInWallet } from "../lib/wallet";
+import { executeBlinkWithExtension, openBlinkInWallet } from "../lib/wallet";
 
 export interface SurgeAlertProps {
   token: string;
@@ -131,13 +131,16 @@ export function SurgeAlert({ token, percentChange, latency, blinkUrl, usdValue, 
 
         <motion.button
           type="button"
-          onClick={(event) => {
+          onClick={async (event) => {
             if (!canTrade) {
               event.preventDefault();
               return;
             }
 
-            openBlinkInWallet(blinkUrl);
+            const execution = await executeBlinkWithExtension(blinkUrl);
+            if (!execution.success) {
+              openBlinkInWallet(blinkUrl);
+            }
           }}
           whileHover={{ scale: 1.02, boxShadow: "0 0 30px rgba(255,106,0,0.6)" }}
           whileTap={{ scale: 0.98 }}
