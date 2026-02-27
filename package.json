@@ -16,6 +16,7 @@
     "@kdt-sol/solana-grpc-client": "^0.1.2",
     "@pythnetwork/hermes-client": "^1.0.0",
     "@solana/actions": "^1.0.0",
+    "@solana/spl-token": "^0.4.12",
     "@solana/web3.js": "^1.91.1",
     "@supabase/supabase-js": "^2.39.7",
     "axios": "^1.6.0",
@@ -23,6 +24,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-rate-limit": "^8.2.1",
+    "node-fetch": "^3.3.2",
     "socket.io": "^4.7.5"
   },
   "devDependencies": {
