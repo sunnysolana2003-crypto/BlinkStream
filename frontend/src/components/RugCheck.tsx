@@ -111,6 +111,18 @@ export function RugCheck() {
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState<RugCheckResult | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [secondsElapsed, setSecondsElapsed] = useState(0);
+
+    React.useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (loading) {
+            setSecondsElapsed(0);
+            interval = setInterval(() => {
+                setSecondsElapsed(s => s + 1);
+            }, 1000);
+        }
+        return () => clearInterval(interval);
+    }, [loading]);
 
     async function handleCheck() {
         const mint = mintInput.trim();
@@ -228,6 +240,46 @@ export function RugCheck() {
                     ))}
                 </div>
             </div>
+
+            {/* Scanning Progress / Waiting Message */}
+            <AnimatePresence>
+                {loading && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="overflow-hidden"
+                    >
+                        <div className="p-4 rounded-2xl bg-[#ff007f]/5 border border-[#ff007f]/20 flex flex-col gap-3">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <div className="relative">
+                                        <Loader2 className="w-4 h-4 text-[#ff007f] animate-spin" />
+                                        <div className="absolute inset-0 bg-[#ff007f] blur-md opacity-40 animate-pulse" />
+                                    </div>
+                                    <span className="text-[11px] font-bold text-white tracking-widest">GATHERING FORENSIC DATA...</span>
+                                </div>
+                                <div className="px-3 py-1 rounded-full bg-black/40 border border-white/5 font-mono text-[10px] text-[#ff7db9]">
+                                    ELAPSED: {secondsElapsed}s
+                                </div>
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                                <p className="text-[10px] text-gray-400 font-mono leading-relaxed">
+                                    Performing deep LP burn verification and Token-2022 extension scan. This may take up to 5-10 seconds depending on RPC congestion.
+                                </p>
+                                <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                                    <motion.div
+                                        className="h-full bg-[#ff007f]"
+                                        initial={{ width: "0%" }}
+                                        animate={{ width: "100%" }}
+                                        transition={{ duration: 10, ease: "linear" }}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Error */}
             <AnimatePresence>
