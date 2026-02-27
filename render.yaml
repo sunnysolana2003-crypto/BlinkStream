@@ -52,9 +52,9 @@ services:
       - key: HACKATHON_SIM_PUBLIC_KEY
         sync: false
       - key: SUPPORTED_TOKENS
-        value: SOL,USDC,BONK,JUP
+        value: SOL,USDC,BONK,JUP,WIF,PYTH,RAY
       - key: AUTONOMOUS_TOKENS
-        value: SOL,BONK,JUP
+        value: SOL,BONK,JUP,WIF,PYTH,RAY
       - key: TOKEN_MINT_MAP
         value: ""
       - key: TOKEN_DECIMALS_MAP
