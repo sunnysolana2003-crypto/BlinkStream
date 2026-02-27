@@ -1,9 +1,8 @@
 const {
-    Connection,
     PublicKey,
     SystemProgram,
-    Transaction,
-    LAMPORTS_PER_SOL,
+    TransactionMessage,
+    VersionedTransaction,
 } = require("@solana/web3.js");
 const {
     getAssociatedTokenAddress,
@@ -14,46 +13,37 @@ const { getConnection } = require("../config/rpc.config");
 const logger = require("../utils/logger");
 
 /**
- * Builds a direct SOL transfer transaction.
- * Used for DONATE action when the inputMint is native SOL.
- * @param {string} senderPubkey - The wallet that will sign and pay.
- * @param {string} receiverPubkey - The destination wallet to receive SOL.
- * @param {number} lamports - Amount in lamports (1 SOL = 1e9 lamports).
+ * Builds a direct SOL transfer VersionedTransaction (V0).
+ * VersionedTransaction is required for Blink/dial.to wallet compatibility.
+ * Legacy Transaction serialization causes "signing failed" in modern wallets.
  */
 async function buildSolTransferTransaction(senderPubkey, receiverPubkey, lamports) {
     const conn = getConnection();
     const sender = new PublicKey(senderPubkey);
     const receiver = new PublicKey(receiverPubkey);
 
-    const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash("confirmed");
+    const { blockhash } = await conn.getLatestBlockhash("confirmed");
 
-    const tx = new Transaction({
+    const message = new TransactionMessage({
+        payerKey: sender,
         recentBlockhash: blockhash,
-        feePayer: sender,
-    }).add(
-        SystemProgram.transfer({
-            fromPubkey: sender,
-            toPubkey: receiver,
-            lamports: Math.floor(lamports),
-        })
-    );
+        instructions: [
+            SystemProgram.transfer({
+                fromPubkey: sender,
+                toPubkey: receiver,
+                lamports: Math.floor(lamports),
+            }),
+        ],
+    }).compileToV0Message();
 
-    // Serialize without requiring signing so that wallet can sign client-side
-    const serialized = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
-    return {
-        transaction: serialized.toString("base64"),
-        lastValidBlockHeight,
-        blockhash,
-    };
+    const tx = new VersionedTransaction(message);
+    // Wallet will add its signature before submitting
+    const serialized = Buffer.from(tx.serialize()).toString("base64");
+    return { transaction: serialized };
 }
 
 /**
- * Builds a direct SPL token transfer transaction.
- * Used for DONATE action when the inputMint is an SPL token (e.g. USDC).
- * @param {string} senderPubkey
- * @param {string} receiverPubkey
- * @param {string} mintAddress - The SPL token mint.
- * @param {number} amount - Token amount in base units (respects decimals).
+ * Builds a direct SPL token transfer VersionedTransaction (V0).
  */
 async function buildSplTransferTransaction(senderPubkey, receiverPubkey, mintAddress, amount) {
     const conn = getConnection();
@@ -67,29 +57,26 @@ async function buildSplTransferTransaction(senderPubkey, receiverPubkey, mintAdd
     const senderAta = await getAssociatedTokenAddress(mint, sender);
     const receiverAta = await getAssociatedTokenAddress(mint, receiver);
 
-    const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash("confirmed");
+    const { blockhash } = await conn.getLatestBlockhash("confirmed");
 
-    const tx = new Transaction({
+    const message = new TransactionMessage({
+        payerKey: sender,
         recentBlockhash: blockhash,
-        feePayer: sender,
-    }).add(
-        createTransferCheckedInstruction(
-            senderAta,
-            mint,
-            receiverAta,
-            sender,
-            BigInt(Math.floor(amount)),
-            decimals
-        )
-    );
+        instructions: [
+            createTransferCheckedInstruction(
+                senderAta,
+                mint,
+                receiverAta,
+                sender,
+                BigInt(Math.floor(amount)),
+                decimals
+            ),
+        ],
+    }).compileToV0Message();
 
-    const serialized = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
-    return {
-        transaction: serialized.toString("base64"),
-        lastValidBlockHeight,
-        blockhash,
-        decimals,
-    };
+    const tx = new VersionedTransaction(message);
+    const serialized = Buffer.from(tx.serialize()).toString("base64");
+    return { transaction: serialized, decimals };
 }
 
 /**
@@ -102,14 +89,8 @@ function isNativeSol(mintAddress) {
 
 /**
  * Universal entry point for building a donate/mint transaction.
- * - For SOL → uses SystemProgram.transfer
- * - For SPL → uses SPL createTransferChecked
- *
- * @param {object} params
- * @param {string} params.senderPubkey - User's wallet address.
- * @param {string} params.receiverPubkey - Target wallet (project, creator, treasury).
- * @param {string} params.inputMint - The token being sent.
- * @param {number} params.amount - Raw amount in base units (lamports for SOL, token units for SPL).
+ * - For SOL → uses SystemProgram.transfer via VersionedTransaction
+ * - For SPL → uses SPL createTransferChecked via VersionedTransaction
  */
 async function buildDirectTransferTransaction({ senderPubkey, receiverPubkey, inputMint, amount }) {
     if (!senderPubkey || !receiverPubkey) {
@@ -117,11 +98,11 @@ async function buildDirectTransferTransaction({ senderPubkey, receiverPubkey, in
     }
 
     if (isNativeSol(inputMint)) {
-        logger.info(`[Transfer] Building SOL transfer: ${amount} lamports → ${receiverPubkey}`);
+        logger.info(`[Transfer] Building SOL V0 tx: ${amount} lamports → ${receiverPubkey}`);
         return buildSolTransferTransaction(senderPubkey, receiverPubkey, amount);
     }
 
-    logger.info(`[Transfer] Building SPL transfer: ${amount} units of ${inputMint} → ${receiverPubkey}`);
+    logger.info(`[Transfer] Building SPL V0 tx: ${amount} units of ${inputMint} → ${receiverPubkey}`);
     return buildSplTransferTransaction(senderPubkey, receiverPubkey, inputMint, amount);
 }
 
