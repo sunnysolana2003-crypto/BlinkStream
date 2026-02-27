@@ -1,42 +1,111 @@
 const { PublicKey } = require("@solana/web3.js");
 const { getConnection } = require("../config/rpc.config");
+const axios = require("axios");
 const logger = require("../utils/logger");
+
+const METADATA_PROGRAM_ID = new PublicKey("metaqb7iiNo7366mCcS3eRpk9pSa5124YXMTX4P6sen");
+const TOKEN_2022_PROGRAM_ID = new PublicKey("TokenzQdBNbLqP5VEhdkAS6EP2rHE8229L8KsSsh7");
+
+const RISK_WEIGHTS = {
+    mintAuthorityActive: 35,
+    freezeAuthorityActive: 20,
+    isMutable: 15,
+    lpNotBurned: 30,
+    top1HolderOver50pct: 20,
+    top5HoldersOver80pct: 15,
+    tradingHaltRisk: 40, // Permanent Delegate or Tax loopholes
+    supplyAnomaly: 10,
+    noMetadata: 5
+};
 
 function getConn() {
     return getConnection();
 }
 
-const RISK_WEIGHTS = {
-    mintAuthorityActive: 35,
-    freezeAuthorityActive: 20,
-    top1HolderOver50pct: 25,
-    top5HoldersOver80pct: 15,
-    supplyAnomalyQuadrillion: 10,
-    noMetadata: 5,
-    zeroHolders: 10
-};
-
+/**
+ * Expert Risk Scoring
+ */
 function scoreRisk(flags) {
     let score = 0;
-    for (const [flag, active] of Object.entries(flags)) {
-        if (active && RISK_WEIGHTS[flag]) {
-            score += RISK_WEIGHTS[flag];
-        }
-    }
+    if (flags.lpNotBurned) score += RISK_WEIGHTS.lpNotBurned;
+    if (flags.mintAuthorityActive) score += RISK_WEIGHTS.mintAuthorityActive;
+    if (flags.freezeAuthorityActive) score += RISK_WEIGHTS.freezeAuthorityActive;
+    if (flags.tradingHaltRisk) score += RISK_WEIGHTS.tradingHaltRisk;
+    if (flags.isMutable) score += RISK_WEIGHTS.isMutable;
+    if (flags.top1HolderOver50pct) score += RISK_WEIGHTS.top1HolderOver50pct;
+    if (flags.top5HoldersOver80pct) score += RISK_WEIGHTS.top5HoldersOver80pct;
+    if (flags.supplyAnomaly) score += RISK_WEIGHTS.supplyAnomaly;
+    if (flags.noMetadata) score += RISK_WEIGHTS.noMetadata;
+
     return Math.min(score, 100);
 }
 
 function riskLabel(score) {
-    if (score >= 70) return "HIGH";
-    if (score >= 40) return "MEDIUM";
+    if (score >= 75) return "DANGER";
+    if (score >= 50) return "HIGH";
+    if (score >= 25) return "MEDIUM";
     return "LOW";
 }
 
-function formatSupply(raw, decimals) {
-    return Number(raw) / Math.pow(10, decimals);
+async function getMetadataStatus(mintAddress) {
+    try {
+        const mint = new PublicKey(mintAddress);
+        const [metadataAddress] = PublicKey.findProgramAddressSync(
+            [Buffer.from("metadata"), METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+            METADATA_PROGRAM_ID
+        );
+        const info = await getConn().getAccountInfo(metadataAddress);
+        if (!info) return { exists: false, isMutable: true };
+
+        // isMutable is the LAST byte of the metadata V1 account (excluding padding/extensions)
+        // For V1 Metadata accounts, isMutable is at offset 1 + 32 + 32 + (string_len*4) ... etc
+        // It's safer to check if it's there. Usually offset is 82 + name len + symbol len + uri len
+        // However, the account data usually ends with isMutable byte.
+        const isMutable = info.data[info.data.length - 1] === 1;
+        return { exists: true, isMutable };
+    } catch (err) {
+        return { exists: false, isMutable: true };
+    }
 }
 
-async function getMintInfo(mintAddress) {
+async function getLPStatus(mintAddress) {
+    try {
+        // Discovery via DexScreener (More efficient than program scan)
+        const dexRes = await axios.get(`https://api.dexscreener.com/latest/dex/tokens/${mintAddress}`, { timeout: 3000 });
+        const pairs = dexRes.data?.pairs || [];
+        const raydiumPair = pairs.find(p => p.dexId === 'raydium');
+
+        if (!raydiumPair) return { found: false, lpBurned: false, liquidity: 0 };
+
+        const lpMint = raydiumPair.lpMint;
+        if (!lpMint) return { found: true, lpBurned: false, liquidity: raydiumPair.liquidity?.usd || 0 };
+
+        // Check LP burn on-chain
+        const lpKey = new PublicKey(lpMint);
+        const supplyRes = await getConn().getTokenSupply(lpKey);
+        const burnRes = await getConn().getTokenLargestAccounts(lpKey);
+
+        const totalLP = Number(supplyRes.value.amount);
+        const burnedLP = burnRes.value.find(acc => acc.address.toBase58() === '11111111111111111111111111111111');
+        const burnedAmount = burnedLP ? Number(burnedLP.amount) : 0;
+
+        const lpBurned = totalLP > 0 && (burnedAmount / totalLP) > 0.95;
+
+        return {
+            found: true,
+            lpBurned,
+            liquidity: raydiumPair.liquidity?.usd || 0,
+            pairAddress: raydiumPair.pairAddress,
+            lpMint
+        };
+    } catch (err) {
+        logger.warn(`LP check failed for ${mintAddress}: ${err.message}`);
+        return { found: false, lpBurned: false, liquidity: 0 };
+    }
+}
+
+async function runRugCheck(mintAddress) {
+    const start = Date.now();
     const pubkey = new PublicKey(mintAddress);
     const info = await getConn().getParsedAccountInfo(pubkey);
 
@@ -45,65 +114,48 @@ async function getMintInfo(mintAddress) {
     }
 
     const parsed = info.value.data.parsed;
-    if (parsed.type !== "mint") {
-        throw new Error("Account is not a mint");
-    }
-
-    return parsed.info;
-}
-
-async function getTopHolders(mintAddress) {
-    const pubkey = new PublicKey(mintAddress);
-    const result = await getConn().getTokenLargestAccounts(pubkey);
-    return result?.value || [];
-}
-
-async function runRugCheck(mintAddress) {
-    const start = Date.now();
-
-    let mintInfo;
-    try {
-        mintInfo = await getMintInfo(mintAddress);
-    } catch (error) {
-        throw new Error(`Invalid mint: ${error.message}`);
-    }
+    const programId = info.value.owner.toBase58();
+    const isToken2022 = programId === TOKEN_2022_PROGRAM_ID.toBase58();
 
     const {
         mintAuthority,
         freezeAuthority,
         supply,
         decimals,
-        isInitialized
-    } = mintInfo;
+        extensions = []
+    } = parsed.info;
 
     const rawSupply = Number(supply || 0);
-    const humanSupply = formatSupply(rawSupply, decimals ?? 0);
+    const humanSupply = rawSupply / Math.pow(10, decimals || 0);
 
-    // Fetch top holders
-    let topHolders = [];
-    let holderError = null;
-    try {
-        topHolders = await getTopHolders(mintAddress);
-    } catch (error) {
-        holderError = error.message;
-        logger.warn(`getTokenLargestAccounts failed for ${mintAddress}: ${error.message}`);
-    }
+    // Parallel checks for efficiency
+    const [metadata, lpStatus, largestAccounts] = await Promise.all([
+        getMetadataStatus(mintAddress),
+        getLPStatus(mintAddress),
+        getConn().getTokenLargestAccounts(pubkey)
+    ]);
 
-    // Calculate holder concentration
+    const topHolders = largestAccounts?.value || [];
     const top1Amount = topHolders[0] ? Number(topHolders[0].uiAmount || 0) : 0;
     const top5Amount = topHolders.slice(0, 5).reduce((sum, h) => sum + Number(h.uiAmount || 0), 0);
     const top1Pct = humanSupply > 0 ? (top1Amount / humanSupply) * 100 : 0;
     const top5Pct = humanSupply > 0 ? (top5Amount / humanSupply) * 100 : 0;
 
-    // Evaluate flags
+    // Token-2022 Loophole Detection
+    const permanentDelegateExt = extensions.find(e => e.extension === 'permanentDelegate');
+    const transferFeeExt = extensions.find(e => e.extension === 'transferFeeConfig');
+    const defaultAccountStateExt = extensions.find(e => e.extension === 'defaultAccountState');
+
     const flags = {
         mintAuthorityActive: Boolean(mintAuthority),
         freezeAuthorityActive: Boolean(freezeAuthority),
+        isMutable: metadata.isMutable,
+        lpNotBurned: lpStatus.found && !lpStatus.lpBurned,
         top1HolderOver50pct: top1Pct > 50,
         top5HoldersOver80pct: top5Pct > 80,
-        supplyAnomalyQuadrillion: humanSupply > 1e15,
-        noMetadata: !isInitialized,
-        zeroHolders: topHolders.length === 0 && !holderError
+        tradingHaltRisk: Boolean(permanentDelegateExt) || (defaultAccountStateExt?.state === 'Frozen'),
+        supplyAnomaly: humanSupply > 1e15,
+        noMetadata: !metadata.exists
     };
 
     const riskScore = scoreRisk(flags);
@@ -111,40 +163,38 @@ async function runRugCheck(mintAddress) {
 
     const checks = [
         {
+            id: "lpStatus",
+            label: "Liquidity Pool",
+            status: lpStatus.found ? (lpStatus.lpBurned ? "SAFE" : "DANGER") : "WARN",
+            detail: lpStatus.found
+                ? (lpStatus.lpBurned ? `Burned/Locked — $${Math.round(lpStatus.liquidity).toLocaleString()} liquidity` : `UNLOCKED — dev can pull $${Math.round(lpStatus.liquidity).toLocaleString()}`)
+                : "Market not found — liquidity unknown",
+        },
+        {
             id: "mintAuthority",
             label: "Mint Authority",
             status: flags.mintAuthorityActive ? "DANGER" : "SAFE",
-            detail: flags.mintAuthorityActive
-                ? `Active — creator can mint unlimited tokens`
-                : "Revoked — supply is fixed",
-            value: mintAuthority || null
+            detail: flags.mintAuthorityActive ? "Active — dev can print more tokens" : "Renounced — supply is fixed",
         },
         {
-            id: "freezeAuthority",
-            label: "Freeze Authority",
-            status: flags.freezeAuthorityActive ? "WARN" : "SAFE",
-            detail: flags.freezeAuthorityActive
-                ? "Active — creator can freeze token accounts"
-                : "Revoked — no freeze risk",
-            value: freezeAuthority || null
+            id: "metadata",
+            label: "Metadata Status",
+            status: flags.isMutable ? "WARN" : "SAFE",
+            detail: flags.isMutable ? "Mutable — dev can change name/icon to mimic other tokens" : "Immutable — identity is locked",
         },
         {
-            id: "holderConcentration",
-            label: "Holder Concentration",
+            id: "tokenStandard",
+            label: "Token Standard",
+            status: flags.tradingHaltRisk ? "DANGER" : "SAFE",
+            detail: isToken2022
+                ? (flags.tradingHaltRisk ? "Token-2022: Permanent Delegate found (CRITICAL)" : "Token-2022: Standard configuration")
+                : "Standard SPL",
+        },
+        {
+            id: "concentration",
+            label: "Whale Analysis",
             status: flags.top1HolderOver50pct ? "DANGER" : flags.top5HoldersOver80pct ? "WARN" : "SAFE",
-            detail: holderError
-                ? `Could not fetch holders: ${holderError}`
-                : `Top 1: ${top1Pct.toFixed(1)}%  |  Top 5: ${top5Pct.toFixed(1)}%`,
-            value: { top1Pct: top1Pct.toFixed(2), top5Pct: top5Pct.toFixed(2), holderCount: topHolders.length }
-        },
-        {
-            id: "supply",
-            label: "Token Supply",
-            status: flags.supplyAnomalyQuadrillion ? "WARN" : "SAFE",
-            detail: flags.supplyAnomalyQuadrillion
-                ? `Abnormally large supply: ${humanSupply.toExponential(2)}`
-                : `${humanSupply.toLocaleString(undefined, { maximumFractionDigits: 2 })} tokens (${decimals} decimals)`,
-            value: { humanSupply, decimals, rawSupply: String(rawSupply) }
+            detail: `Top 1 holds ${top1Pct.toFixed(1)}% | Top 5 hold ${top5Pct.toFixed(1)}%`,
         }
     ];
 

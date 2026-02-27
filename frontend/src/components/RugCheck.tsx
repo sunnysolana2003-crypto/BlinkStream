@@ -40,9 +40,12 @@ const RISK_COLOR = {
 };
 
 const CHECK_ICONS: Record<string, React.ElementType> = {
+    lpStatus: Flame,
     mintAuthority: Lock,
     freezeAuthority: Lock,
-    holderConcentration: Users,
+    metadata: ShieldAlert,
+    tokenStandard: Shield,
+    concentration: Users,
     supply: BarChart2
 };
 
