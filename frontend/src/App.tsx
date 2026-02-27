@@ -529,15 +529,33 @@ export default function App() {
       return;
     }
     try {
-      const win = window as unknown as { solana?: { connect: () => Promise<{ publicKey: { toString: () => string } }> } };
-      if (!win.solana) {
-        showGlitchError("Phantom wallet not found — install it at phantom.app");
+      type PhantomProvider = {
+        connect: (opts?: { onlyIfTrusted?: boolean }) => Promise<{ publicKey: { toString: () => string } }>;
+        isPhantom?: boolean;
+      };
+      type WinWithPhantom = {
+        phantom?: { solana?: PhantomProvider };
+        solana?: PhantomProvider;
+      };
+      const win = window as unknown as WinWithPhantom;
+
+      // Prefer window.phantom.solana (newer Phantom), fallback to window.solana
+      const provider = win.phantom?.solana ?? win.solana;
+
+      if (!provider?.isPhantom && !provider) {
+        showGlitchError("Phantom not found — install it at phantom.app");
         return;
       }
-      const response = await win.solana.connect();
+
+      const response = await provider.connect();
       setConnectedWallet(response.publicKey.toString());
     } catch (error) {
-      showGlitchError("Wallet connection cancelled");
+      const code = (error as { code?: number })?.code;
+      if (code === 4001) {
+        // User rejected the request — don't show an error
+        return;
+      }
+      showGlitchError("Could not connect wallet — try again");
     }
   }, [connectedWallet, showGlitchError]);
 
