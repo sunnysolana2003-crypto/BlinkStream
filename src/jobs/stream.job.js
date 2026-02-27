@@ -11,6 +11,7 @@ const {
 } = require("../config/grpc.config");
 const { parseTransaction } = require("../services/txParser.service");
 const { detectLargeSwap } = require("../services/swapDetector.service");
+const { detectAndEmitWhale } = require("../services/whale.service");
 const { getSolPrice } = require("../services/price.service");
 const { buildStandardEvent, persistEvent } = require("../services/telemetry.service");
 const { rpcRequest, rpcBatch } = require("../services/orbitflareRpc.service");
@@ -144,6 +145,12 @@ async function processParsedTransaction(parsedTx, options = {}) {
   const solPrice = Number.isFinite(options.solPrice) && options.solPrice > 0
     ? options.solPrice
     : await getSolPrice();
+
+  // Whale detection — runs async, does not block the main event flow
+  detectAndEmitWhale(parsedTx, solPrice).catch((err) =>
+    logger.warn("Whale detection error:", err.message)
+  );
+
   const largeSwap = detectLargeSwap(parsedTx, solPrice);
   if (!largeSwap) {
     return false;

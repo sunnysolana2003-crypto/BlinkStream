@@ -7,6 +7,7 @@ const { initSocket } = require("./sockets/socket");
 const { startStreamJob, stopStreamJob } = require("./jobs/stream.job");
 const { startAutonomousJob, stopAutonomousJob } = require("./jobs/autonomous.job");
 const { startOrbitFlareOpsMonitor, stopOrbitFlareOpsMonitor } = require("./services/orbitflareOps.service");
+const { startPriorityFeePoller, stopPriorityFeePoller } = require("./services/priorityFee.service");
 const logger = require("./utils/logger");
 
 const PORT = Number(process.env.PORT || 3000);
@@ -26,6 +27,7 @@ server.listen(PORT, () => {
   }
 
   startAutonomousJob();
+  startPriorityFeePoller();
 });
 
 async function shutdown(signal) {
@@ -40,6 +42,7 @@ async function shutdown(signal) {
     await stopStreamJob();
     stopAutonomousJob();
     stopOrbitFlareOpsMonitor();
+    stopPriorityFeePoller();
 
     await new Promise((resolve) => {
       server.close(() => resolve());

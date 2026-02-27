@@ -15,6 +15,8 @@ import { SurgeAlert, SurgeAlertProps } from "./components/SurgeAlert";
 import { JudgeBriefing } from "./components/JudgeBriefing";
 import { OrbitflareExplorer } from "./components/OrbitflareExplorer";
 import { RugCheck } from "./components/RugCheck";
+import { WhaleStream } from "./components/WhaleStream";
+import { PriorityOptimizer } from "./components/PriorityOptimizer";
 import api from "./lib/api";
 import socket from "./lib/socket";
 import { getTokenDisplayName, resolveTokenName, isMintAddress } from "./lib/tokenNames";
@@ -791,6 +793,14 @@ export default function App() {
           ) : activeSection === "rugcheck" ? (
             <motion.div variants={itemVariants} className="flex-1 min-w-0 overflow-y-auto pr-2">
               <RugCheck />
+            </motion.div>
+          ) : activeSection === "whalestream" ? (
+            <motion.div variants={itemVariants} className="flex-1 min-w-0 overflow-y-auto pr-2">
+              <WhaleStream />
+            </motion.div>
+          ) : activeSection === "priorityfees" ? (
+            <motion.div variants={itemVariants} className="flex-1 min-w-0 overflow-y-auto pr-2">
+              <PriorityOptimizer />
             </motion.div>
           ) : activeSection === "settings" ? (
             <motion.div variants={itemVariants} className="flex-1 min-w-0 overflow-y-auto pr-2">

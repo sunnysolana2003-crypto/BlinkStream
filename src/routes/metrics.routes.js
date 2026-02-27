@@ -30,6 +30,8 @@ const {
 } = require("../jobs/autonomous.job");
 const { getWalletPortfolio } = require("../services/portfolio.service");
 const { inspectTransaction } = require("../services/txInspector.service");
+const { getWhaleHistory, getWhaleStats } = require("../services/whale.service");
+const { getPriorityFeeSnapshot, refreshSnapshot: refreshPriorityFees } = require("../services/priorityFee.service");
 
 const router = express.Router();
 const DEFAULT_EXPLORER_ADDRESS = String(
@@ -339,6 +341,26 @@ router.get("/resolve-token", async (req, res, next) => {
     const { resolveToken } = require("../services/tokenRegistry.service");
     const resolved = await resolveToken(token);
     return res.json(resolved);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// ─── Whale Stream endpoints ───────────────────────────────────────────────
+router.get("/whale/history", (req, res) => {
+  const limit = Math.min(Number(req.query.limit || 50), 200);
+  return res.json({
+    alerts: getWhaleHistory(limit),
+    stats: getWhaleStats()
+  });
+});
+
+// ─── Priority Fee endpoints ───────────────────────────────────────────────
+router.get("/priority-fees", async (req, res, next) => {
+  try {
+    const forceRefresh = String(req.query.refresh || "").toLowerCase() === "true";
+    if (forceRefresh) await refreshPriorityFees();
+    return res.json(getPriorityFeeSnapshot());
   } catch (error) {
     return next(error);
   }
