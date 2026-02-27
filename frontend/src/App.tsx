@@ -51,6 +51,63 @@ const ZERO_LATENCY: BlinkLatency = {
 const MAX_PRICE_HISTORY_POINTS = 3600;
 const MINT_ADDRESS_REGEX = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
+type WalletConnectResponse = {
+  publicKey?: { toString: () => string } | string | null;
+};
+
+type GenericWalletProvider = {
+  connect?: (opts?: { onlyIfTrusted?: boolean }) => Promise<WalletConnectResponse>;
+  publicKey?: { toString: () => string } | string | null;
+  isPhantom?: boolean;
+  isSolflare?: boolean;
+  isBackpack?: boolean;
+};
+
+type WalletWindow = Window & {
+  phantom?: { solana?: GenericWalletProvider };
+  solflare?: GenericWalletProvider;
+  backpack?: { solana?: GenericWalletProvider };
+  solana?: GenericWalletProvider;
+};
+
+function extractWalletAddress(provider: GenericWalletProvider, response: WalletConnectResponse | null) {
+  const responseKey = response?.publicKey;
+  if (responseKey && typeof responseKey === "object" && typeof responseKey.toString === "function") {
+    return responseKey.toString();
+  }
+  if (typeof responseKey === "string" && responseKey.trim()) {
+    return responseKey.trim();
+  }
+
+  const providerKey = provider?.publicKey;
+  if (providerKey && typeof providerKey === "object" && typeof providerKey.toString === "function") {
+    return providerKey.toString();
+  }
+  if (typeof providerKey === "string" && providerKey.trim()) {
+    return providerKey.trim();
+  }
+
+  return "";
+}
+
+function resolveWalletProvider(win: WalletWindow) {
+  const candidates: Array<{ name: string; provider: GenericWalletProvider | undefined }> = [
+    { name: "Phantom", provider: win.phantom?.solana },
+    { name: "Phantom", provider: win.solana?.isPhantom ? win.solana : undefined },
+    { name: "Solflare", provider: win.solflare },
+    { name: "Backpack", provider: win.backpack?.solana },
+    { name: "Solana Wallet", provider: win.solana }
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate.provider && typeof candidate.provider.connect === "function") {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
 function normalizeUserTokenInput(value: string) {
   const raw = String(value || "").trim();
   if (!raw) {
@@ -529,33 +586,38 @@ export default function App() {
       return;
     }
     try {
-      type PhantomProvider = {
-        connect: (opts?: { onlyIfTrusted?: boolean }) => Promise<{ publicKey: { toString: () => string } }>;
-        isPhantom?: boolean;
-      };
-      type WinWithPhantom = {
-        phantom?: { solana?: PhantomProvider };
-        solana?: PhantomProvider;
-      };
-      const win = window as unknown as WinWithPhantom;
+      const win = window as WalletWindow;
+      const resolved = resolveWalletProvider(win);
 
-      // Prefer window.phantom.solana (newer Phantom), fallback to window.solana
-      const provider = win.phantom?.solana ?? win.solana;
-
-      if (!provider?.isPhantom && !provider) {
-        showGlitchError("Phantom not found — install it at phantom.app");
+      if (!resolved) {
+        showGlitchError("No Solana wallet found — install Phantom or Solflare");
         return;
       }
 
-      const response = await provider.connect();
-      setConnectedWallet(response.publicKey.toString());
+      const response = await resolved.provider.connect?.({ onlyIfTrusted: false });
+      const address = extractWalletAddress(resolved.provider, response || null);
+
+      if (!address) {
+        showGlitchError(`${resolved.name} connected but no wallet address was returned`);
+        return;
+      }
+
+      setConnectedWallet(address);
     } catch (error) {
       const code = (error as { code?: number })?.code;
-      if (code === 4001) {
-        // User rejected the request — don't show an error
+      const message = String((error as { message?: string })?.message || "");
+
+      if (code === 4001 || code === 4100 || /rejected|cancelled|canceled/i.test(message)) {
+        // User rejected the request.
         return;
       }
-      showGlitchError("Could not connect wallet — try again");
+
+      if (code === -32002 || /already processing|pending/i.test(message)) {
+        showGlitchError("Wallet approval is already pending. Check your wallet popup");
+        return;
+      }
+
+      showGlitchError("Could not connect wallet — unlock extension and approve the request");
     }
   }, [connectedWallet, showGlitchError]);
 
