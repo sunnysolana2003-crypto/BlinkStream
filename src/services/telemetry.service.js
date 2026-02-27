@@ -42,13 +42,27 @@ async function getMetrics() {
     };
   }
 
-  const slot = await getConnection().getSlot();
+  try {
+    // Add a race condition to prevent long hangs on health checks
+    const slot = await Promise.race([
+      getConnection().getSlot(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("RPC Timeout")), 3000))
+    ]);
 
-  return {
-    rpcLatency: Date.now() - start,
-    slot,
-    network: process.env.SOLANA_NETWORK || "mainnet-beta"
-  };
+    return {
+      rpcLatency: Date.now() - start,
+      slot,
+      network: process.env.SOLANA_NETWORK || "mainnet-beta"
+    };
+  } catch (error) {
+    logger.warn("Metrics fetch failed or timed out:", error.message);
+    return {
+      rpcLatency: null,
+      slot: null,
+      network: process.env.SOLANA_NETWORK || "mainnet-beta",
+      error: error.message
+    };
+  }
 }
 
 async function persistEvent(event, options = {}) {
