@@ -7,6 +7,7 @@ import {
   History,
   Settings,
   TerminalSquare,
+  ShieldAlert,
 } from "lucide-react";
 
 const navItems = [
@@ -15,6 +16,7 @@ const navItems = [
   { id: "nodes", icon: Layers, label: "Node Topology" },
   { id: "history", icon: History, label: "Event Log" },
   { id: "terminal", icon: TerminalSquare, label: "Trader Hub" },
+  { id: "rugcheck", icon: ShieldAlert, label: "Rug Checker" },
   { id: "settings", icon: Settings, label: "System Config" },
 ];
 

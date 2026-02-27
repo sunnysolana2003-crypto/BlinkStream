@@ -10,6 +10,7 @@ const priceRoutes = require("./routes/price.routes");
 const blinkRoutes = require("./routes/blink.routes");
 const demoRoutes = require("./routes/demo.routes");
 const healthRoutes = require("./routes/health.routes");
+const rugCheckRoutes = require("./routes/rugCheck.routes");
 const errorMiddleware = require("./middleware/error.middleware");
 const logger = require("./utils/logger");
 
@@ -47,6 +48,7 @@ app.use("/api/price", priceRoutes);
 app.use("/api/health", healthRoutes);
 app.use("/api/blinks", apiLimiter, blinkRoutes);
 app.use("/api/demo", apiLimiter, demoRoutes);
+app.use("/api/rug-check", rugCheckRoutes);
 
 // Serve the built frontend from the unified dist folder
 const frontendDistPath = path.join(__dirname, "..", "frontend", "dist");
