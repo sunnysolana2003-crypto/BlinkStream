@@ -62,29 +62,43 @@ function sampleSeries(points: PricePoint[], count = DEFAULT_BAR_COUNT) {
   return sampled;
 }
 
-function buildPriceBars(priceHistory: PricePoint[], timeframe: string) {
+function buildChartData(priceHistory: PricePoint[], timeframe: string, svgWidth = 800, svgHeight = 200) {
   const windowPrices = getWindowPrices(priceHistory, timeframe);
-  const sampled = sampleSeries(windowPrices);
+  const sampled = sampleSeries(windowPrices, 80);
 
-  if (!sampled.length) {
-    return Array.from({ length: DEFAULT_BAR_COUNT }, () => ({ height: 50, isUp: true }));
+  if (sampled.length < 2) {
+    const dummy = [100, 100, 100, 100];
+    return { points: dummy.map((p, i) => ({ x: (i / (dummy.length - 1)) * svgWidth, y: svgHeight / 2, price: p })), minPrice: 99, maxPrice: 101, range: 2 };
   }
 
   const minPrice = Math.min(...sampled);
   const maxPrice = Math.max(...sampled);
-  const range = Math.max(maxPrice - minPrice, 0.000001);
+  const pad = (maxPrice - minPrice) * 0.12 || 0.01;
+  const lo = minPrice - pad;
+  const hi = maxPrice + pad;
+  const range = hi - lo;
 
-  return sampled.map((value, index) => {
-    const normalized = (value - minPrice) / range;
-    const height = Math.round(22 + normalized * 73);
-    const previous = index > 0 ? sampled[index - 1] : value;
+  const points = sampled.map((price, i) => ({
+    x: (i / (sampled.length - 1)) * svgWidth,
+    y: svgHeight - ((price - lo) / range) * svgHeight,
+    price
+  }));
 
-    return {
-      height,
-      isUp: value >= previous
-    };
-  });
+  return { points, minPrice, maxPrice, range: hi - lo, lo, hi };
 }
+
+function smoothPath(points: { x: number; y: number }[]) {
+  if (points.length < 2) return "";
+  let d = `M ${points[0].x},${points[0].y}`;
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    const cpx = (prev.x + curr.x) / 2;
+    d += ` C ${cpx},${prev.y} ${cpx},${curr.y} ${curr.x},${curr.y}`;
+  }
+  return d;
+}
+
 
 function calculateChangePercent(priceHistory: PricePoint[], timeframe: string) {
   const windowPrices = getWindowPrices(priceHistory, timeframe);
@@ -137,7 +151,7 @@ export function TradingPanel({
   const [customTokenInput, setCustomTokenInput] = useState("");
   const displayName = tokenDisplayNames[token] || getTokenDisplayName(token);
 
-  const bars = useMemo(() => buildPriceBars(priceHistory, timeframe), [priceHistory, timeframe]);
+  const chartData = useMemo(() => buildChartData(priceHistory, timeframe), [priceHistory, timeframe]);
   const changePercent = useMemo(
     () => calculateChangePercent(priceHistory, timeframe),
     [priceHistory, timeframe]
@@ -218,8 +232,8 @@ export function TradingPanel({
                   key={timeFrame}
                   onClick={() => setTimeframe(timeFrame)}
                   className={`px-3 py-1 rounded text-xs font-mono transition-colors ${timeframe === timeFrame
-                      ? "bg-[#00f3ff]/20 text-[#00f3ff] border border-[#00f3ff]/30 shadow-[0_0_10px_rgba(0,243,255,0.2)]"
-                      : "bg-black/40 text-gray-400 hover:text-white border border-transparent"
+                    ? "bg-[#00f3ff]/20 text-[#00f3ff] border border-[#00f3ff]/30 shadow-[0_0_10px_rgba(0,243,255,0.2)]"
+                    : "bg-black/40 text-gray-400 hover:text-white border border-transparent"
                     }`}
                 >
                   {timeFrame}
@@ -228,27 +242,69 @@ export function TradingPanel({
             </div>
           </div>
 
-          <div className="h-64 relative w-full flex items-end gap-1 z-10">
-            {bars.map((bar, index) => (
-              <motion.div
-                key={`${timeframe}-${index}`}
-                initial={{ height: 0 }}
-                animate={{ height: `${bar.height}%` }}
-                transition={{ duration: 1, delay: index * 0.02, type: "spring" }}
-                whileHover={{ opacity: 1, filter: "brightness(1.5)" }}
-                className={`flex-1 rounded-t-sm opacity-80 cursor-crosshair transition-all ${bar.isUp
-                    ? "bg-gradient-to-t from-[#00f3ff]/10 to-[#00f3ff] shadow-[0_0_10px_rgba(0,243,255,0.5)]"
-                    : "bg-gradient-to-t from-[#ff007f]/10 to-[#ff007f] shadow-[0_0_10px_rgba(255,0,127,0.5)]"
-                  }`}
-              />
-            ))}
+          {/* Professional SVG area chart */}
+          {(() => {
+            const W = 800, H = 200;
+            const { points, lo, hi } = chartData;
+            const isUp = points.length >= 2 && points[points.length - 1].price >= points[0].price;
+            const lineColor = isUp ? "#00f3ff" : "#ff007f";
+            const gradId = isUp ? "grad-up" : "grad-down";
+            const linePath = smoothPath(points);
+            const areaPath = linePath + ` L ${points[points.length - 1].x},${H} L ${points[0].x},${H} Z`;
+            const last = points[points.length - 1];
+            const gridRows = 5;
 
-            <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-20">
-              {[1, 2, 3, 4].map((row) => (
-                <div key={row} className="w-full h-px bg-[#00f3ff] border-dashed" />
-              ))}
-            </div>
-          </div>
+            return (
+              <div className="h-56 relative w-full z-10">
+                <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" preserveAspectRatio="none" style={{ overflow: "visible" }}>
+                  <defs>
+                    <linearGradient id="grad-up" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#00f3ff" stopOpacity="0.25" />
+                      <stop offset="100%" stopColor="#00f3ff" stopOpacity="0" />
+                    </linearGradient>
+                    <linearGradient id="grad-down" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#ff007f" stopOpacity="0.2" />
+                      <stop offset="100%" stopColor="#ff007f" stopOpacity="0" />
+                    </linearGradient>
+                    <filter id="glow">
+                      <feGaussianBlur stdDeviation="2.5" result="blur" />
+                      <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                    </filter>
+                  </defs>
+
+                  {/* Grid lines */}
+                  {Array.from({ length: gridRows }).map((_, i) => {
+                    const y = (i / (gridRows - 1)) * H;
+                    const priceAtRow = hi !== undefined && lo !== undefined ? hi - (i / (gridRows - 1)) * (hi - lo) : 0;
+                    return (
+                      <g key={i}>
+                        <line x1={0} y1={y} x2={W} y2={y} stroke="rgba(255,255,255,0.06)" strokeWidth="1" strokeDasharray="4 6" />
+                        <text x={W - 2} y={y - 3} fill="rgba(255,255,255,0.3)" fontSize="10" textAnchor="end" fontFamily="monospace">
+                          ${priceAtRow > 1000 ? priceAtRow.toFixed(0) : priceAtRow > 1 ? priceAtRow.toFixed(2) : priceAtRow.toFixed(5)}
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                  {/* Area fill */}
+                  <path d={areaPath} fill={`url(#${gradId})`} />
+
+                  {/* Glowing price line */}
+                  <path d={linePath} fill="none" stroke={lineColor} strokeWidth="1.5" filter="url(#glow)" opacity="0.6" />
+                  <path d={linePath} fill="none" stroke={lineColor} strokeWidth="1" />
+
+                  {/* Live dot */}
+                  <circle cx={last.x} cy={last.y} r="3" fill={lineColor} filter="url(#glow)">
+                    <animate attributeName="r" values="3;5;3" dur="2s" repeatCount="indefinite" />
+                    <animate attributeName="opacity" values="1;0.5;1" dur="2s" repeatCount="indefinite" />
+                  </circle>
+
+                  {/* Vertical cursor line at last point */}
+                  <line x1={last.x} y1={0} x2={last.x} y2={H} stroke={lineColor} strokeWidth="0.5" strokeDasharray="3 4" opacity="0.3" />
+                </svg>
+              </div>
+            );
+          })()}
         </div>
       </div>
 

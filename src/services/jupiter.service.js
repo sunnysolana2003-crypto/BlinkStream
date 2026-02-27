@@ -121,6 +121,22 @@ function deriveSwapUrlFromQuoteUrl(quoteUrl) {
   }
 }
 
+function getSwapUrlCandidates(quoteUrl) {
+  const candidates = [];
+  const pushCandidate = (url) => {
+    const derived = deriveSwapUrlFromQuoteUrl(url);
+    if (derived && !candidates.includes(derived)) {
+      candidates.push(derived);
+    }
+  };
+
+  pushCandidate(quoteUrl);
+  pushCandidate(getJupiterQuoteUrl());
+  pushCandidate(getOrbitFlareQuoteUrl());
+
+  return candidates;
+}
+
 async function requestQuote(quoteUrl, params) {
   const headers = {};
   const isOrbitFlareEndpoint = /orbitflare/i.test(String(quoteUrl || ""));
@@ -287,9 +303,8 @@ async function getSwapTransaction({ quote, quoteUrl, userPublicKey } = {}) {
     };
   }
 
-  const effectiveQuoteUrl = quoteUrl || getJupiterQuoteUrl();
-  const swapUrl = effectiveQuoteUrl ? deriveSwapUrlFromQuoteUrl(effectiveQuoteUrl) : null;
-  if (!swapUrl) {
+  const swapUrls = getSwapUrlCandidates(quoteUrl);
+  if (!swapUrls.length) {
     return {
       swapTransaction: null,
       latency: Date.now() - start,
@@ -309,48 +324,53 @@ async function getSwapTransaction({ quote, quoteUrl, userPublicKey } = {}) {
     asLegacyTransaction: true
   };
 
-  const headers = {
-    "content-type": "application/json"
-  };
-  if (/orbitflare/i.test(String(swapUrl || "")) && process.env.ORBITFLARE_API_KEY) {
-    headers["x-api-key"] = process.env.ORBITFLARE_API_KEY;
-  }
+  let lastError = "Swap request failed";
+  let lastSource = swapUrls[swapUrls.length - 1];
 
-  try {
-    const response = await withTimeout(
-      axios.post(swapUrl, body, {
-        headers
-      }),
-      3000
-    );
-
-    const swapTransaction = extractSwapTransaction(response.data);
-    if (!swapTransaction) {
-      return {
-        swapTransaction: null,
-        latency: Date.now() - start,
-        success: false,
-        error: "Swap response missing swapTransaction",
-        source: swapUrl
-      };
+  for (const swapUrl of swapUrls) {
+    const headers = {
+      "content-type": "application/json"
+    };
+    if (/orbitflare/i.test(String(swapUrl || "")) && process.env.ORBITFLARE_API_KEY) {
+      headers["x-api-key"] = process.env.ORBITFLARE_API_KEY;
     }
 
-    return {
-      swapTransaction,
-      latency: Date.now() - start,
-      success: true,
-      source: swapUrl
-    };
-  } catch (error) {
-    logger.warn("Swap transaction request failed:", error.message);
-    return {
-      swapTransaction: null,
-      latency: Date.now() - start,
-      success: false,
-      error: error.message,
-      source: swapUrl
-    };
+    try {
+      const response = await withTimeout(
+        axios.post(swapUrl, body, {
+          headers
+        }),
+        3000
+      );
+
+      const swapTransaction = extractSwapTransaction(response.data);
+      if (!swapTransaction) {
+        lastError = "Swap response missing swapTransaction";
+        lastSource = swapUrl;
+        logger.warn(`${swapUrl} returned no swapTransaction, trying next provider`);
+        continue;
+      }
+
+      return {
+        swapTransaction,
+        latency: Date.now() - start,
+        success: true,
+        source: swapUrl
+      };
+    } catch (error) {
+      lastError = error.message || "Swap request failed";
+      lastSource = swapUrl;
+      logger.warn(`Swap transaction request failed (${swapUrl}):`, lastError);
+    }
   }
+
+  return {
+    swapTransaction: null,
+    latency: Date.now() - start,
+    success: false,
+    error: lastError,
+    source: lastSource
+  };
 }
 
 module.exports = { getQuote, getSwapTransaction, getQuoteSourceStats };

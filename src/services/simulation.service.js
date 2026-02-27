@@ -2,6 +2,7 @@ const { Transaction, VersionedTransaction } = require("@solana/web3.js");
 const { DEMO_MODE, DEMO_PAYLOAD } = require("../config/constants");
 const { getConnection } = require("../config/rpc.config");
 const logger = require("../utils/logger");
+let lastExpectedSimulationLogAt = 0;
 
 function withTimeout(promise, ms) {
   return Promise.race([
@@ -28,6 +29,12 @@ function normalizeBase64(value) {
   }
 
   return normalized + "=".repeat(4 - padLength);
+}
+
+function isExpectedSimulationRuntimeError(simulationError) {
+  const raw = JSON.stringify(simulationError || "");
+  // Common non-fatal simulation case: token/Jupiter path with insufficient balance/state.
+  return raw.includes("\"InstructionError\"") && raw.includes("\"Custom\":1");
 }
 
 async function simulateWithRpcRequest(encodedTransaction) {
@@ -110,7 +117,19 @@ async function simulateSwap(quote) {
 
     const simulationError = simulation?.value?.err || null;
     if (simulationError) {
-      logger.warn("Simulation returned runtime error:", JSON.stringify(simulationError));
+      if (isExpectedSimulationRuntimeError(simulationError)) {
+        const now = Date.now();
+        if (now - lastExpectedSimulationLogAt > 60000) {
+          logger.info(
+            "Simulation returned expected runtime error (likely insufficient balance/account state on simulation wallet)"
+          );
+          lastExpectedSimulationLogAt = now;
+        } else {
+          logger.debug("Simulation returned expected runtime error:", JSON.stringify(simulationError));
+        }
+      } else {
+        logger.warn("Simulation returned runtime error:", JSON.stringify(simulationError));
+      }
     }
 
     return {
