@@ -237,6 +237,9 @@ async function generateBlink(options = {}) {
     inputMint,
     outputMint
   } = resolveBlinkTradeParams(options);
+  const userPublicKey = typeof options.userPublicKey === "string" && options.userPublicKey.trim()
+    ? options.userPublicKey.trim()
+    : undefined;
   const totalStart = Date.now();
 
   let quoteLatency;
@@ -245,7 +248,8 @@ async function generateBlink(options = {}) {
   const quoteResult = await getQuote({ inputMint, outputMint, amount });
   const swapResult = await getSwapTransaction({
     quote: quoteResult.quote,
-    quoteUrl: quoteResult.quoteUrl
+    quoteUrl: quoteResult.quoteUrl,
+    userPublicKey
   });
   quoteLatency = quoteResult.latency + swapResult.latency;
 

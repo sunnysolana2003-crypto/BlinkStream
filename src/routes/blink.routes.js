@@ -69,8 +69,8 @@ function shouldRenderHumanHtml(req) {
   const accept = String(req.headers.accept || "").toLowerCase();
   const hasActionNegotiationHeader = Boolean(
     req.headers["x-accept-action-version"] ||
-      req.headers["x-accept-blockchain-ids"] ||
-      req.headers["x-action-version"]
+    req.headers["x-accept-blockchain-ids"] ||
+    req.headers["x-action-version"]
   );
 
   return accept.includes("text/html") && !hasActionNegotiationHeader;
@@ -117,11 +117,10 @@ function buildHumanActionPage({ trade, actionUrl, dialLink }) {
         <div class="item"><div class="label">Output Mint</div><div class="value">${escapeHtml(trade.outputMint)}</div></div>
       </div>
       <div class="actions">
-        ${
-          canUseDial
-            ? `<a class="btn" href="${safeDialLink}" target="_blank" rel="noopener noreferrer">Open in Dial</a>`
-            : ""
-        }
+        ${canUseDial
+      ? `<a class="btn" href="${safeDialLink}" target="_blank" rel="noopener noreferrer">Open in Dial</a>`
+      : ""
+    }
         <a class="btn secondary" href="${safeActionUrl}?format=json" target="_blank" rel="noopener noreferrer">View JSON</a>
         <button class="btn secondary" onclick="navigator.clipboard.writeText('${safeActionUrl}')">Copy Action URL</button>
       </div>
@@ -158,14 +157,15 @@ function validateBlinkPayload(req, res, next) {
 
 async function handleGenerate(req, res, next) {
   try {
-    const { token = "SOL", actionType = "swap", amount } = req.body || {};
+    const { token = "SOL", actionType = "swap", amount, userPublicKey } = req.body || {};
     const baseUrl = getRequestBaseUrl(req);
 
     const blink = await generateBlink({
       token: token.toUpperCase(),
       actionType,
       amount: Number(amount) || undefined,
-      baseUrl
+      baseUrl,
+      userPublicKey: typeof userPublicKey === "string" && userPublicKey.trim() ? userPublicKey.trim() : undefined
     });
 
     const persistence = await storeBlinkForUser({

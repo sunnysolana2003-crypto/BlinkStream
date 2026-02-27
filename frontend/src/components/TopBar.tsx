@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "motion/react";
-import { Wifi, RotateCcw, Cpu, Clock, Presentation } from "lucide-react";
+import { Wifi, RotateCcw, Cpu, Clock, Presentation, Wallet } from "lucide-react";
 import { AnimatedCounter } from "./AnimatedCounter";
 
 interface TopBarProps {
@@ -9,8 +9,10 @@ interface TopBarProps {
   isDemoMode: boolean;
   judgeMode: boolean;
   signalCount: number;
+  connectedWallet: string | null;
   onToggleJudgeMode: () => void;
   onResetView: () => void;
+  onConnectWallet: () => void;
 }
 
 export function TopBar({
@@ -19,8 +21,10 @@ export function TopBar({
   isDemoMode,
   judgeMode,
   signalCount,
+  connectedWallet,
   onToggleJudgeMode,
-  onResetView
+  onResetView,
+  onConnectWallet
 }: TopBarProps) {
   const latency = rpcLatency ?? 0;
 
@@ -48,11 +52,10 @@ export function TopBar({
           whileHover={{ scale: 1.03 }}
           whileTap={{ scale: 0.98 }}
           onClick={onToggleJudgeMode}
-          className={`px-3 py-2 rounded-xl border text-xs font-bold tracking-widest transition-colors flex items-center gap-2 ${
-            judgeMode
-              ? "bg-[#00f3ff]/20 border-[#00f3ff]/50 text-[#00f3ff]"
-              : "bg-black/40 border-white/10 text-gray-300 hover:text-white hover:border-white/30"
-          }`}
+          className={`px-3 py-2 rounded-xl border text-xs font-bold tracking-widest transition-colors flex items-center gap-2 ${judgeMode
+            ? "bg-[#00f3ff]/20 border-[#00f3ff]/50 text-[#00f3ff]"
+            : "bg-black/40 border-white/10 text-gray-300 hover:text-white hover:border-white/30"
+            }`}
         >
           <Presentation className="w-4 h-4" />
           {judgeMode ? "TRADING VIEW" : "JUDGE MODE"}
@@ -84,14 +87,29 @@ export function TopBar({
           </span>
         </motion.div>
 
-        <button
+        <motion.button
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={onConnectWallet}
+          className={`px-3 py-2 rounded-xl border text-xs font-bold tracking-widest transition-colors flex items-center gap-2 ${connectedWallet
+            ? "bg-[#00f3ff]/10 border-[#00f3ff]/40 text-[#00f3ff]"
+            : "bg-black/40 border-white/10 text-gray-300 hover:text-white hover:border-white/30"
+            }`}
+        >
+          <Wallet className="w-4 h-4" />
+          {connectedWallet
+            ? `${connectedWallet.slice(0, 4)}...${connectedWallet.slice(-4)}`
+            : "CONNECT"}
+        </motion.button>
+
+        <motion.button
           onClick={onResetView}
           className="p-2 rounded-full bg-[#ff007f]/10 border border-[#ff007f]/30 text-[#ff007f] hover:bg-[#ff007f]/20 transition-colors relative group"
           title="Reset view"
         >
           <RotateCcw className="w-5 h-5" />
           <div className="absolute inset-0 rounded-full shadow-[0_0_15px_#ff007f] opacity-0 group-hover:opacity-100 transition-opacity" />
-        </button>
+        </motion.button>
       </div>
     </header>
   );

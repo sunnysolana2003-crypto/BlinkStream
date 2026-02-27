@@ -148,6 +148,7 @@ export default function App() {
   const [addingWatchToken, setAddingWatchToken] = useState(false);
   const [watchTokenSaved, setWatchTokenSaved] = useState<string | null>(null);
   const [tokenDisplayNames, setTokenDisplayNames] = useState<Record<string, string>>({});
+  const [connectedWallet, setConnectedWallet] = useState<string | null>(null);
 
   const [blinkUrl, setBlinkUrl] = useState("");
   const [blinkLatency, setBlinkLatency] = useState<BlinkLatency | null>(null);
@@ -489,6 +490,10 @@ export default function App() {
           payload.amount = amount;
         }
 
+        if (connectedWallet) {
+          payload.userPublicKey = connectedWallet;
+        }
+
         let response;
 
         try {
@@ -515,8 +520,26 @@ export default function App() {
         setGeneratingBlink(false);
       }
     },
-    [handleApiError]
+    [handleApiError, connectedWallet]
   );
+
+  const handleConnectWallet = useCallback(async () => {
+    if (connectedWallet) {
+      setConnectedWallet(null);
+      return;
+    }
+    try {
+      const win = window as unknown as { solana?: { connect: () => Promise<{ publicKey: { toString: () => string } }> } };
+      if (!win.solana) {
+        showGlitchError("Phantom wallet not found — install it at phantom.app");
+        return;
+      }
+      const response = await win.solana.connect();
+      setConnectedWallet(response.publicKey.toString());
+    } catch (error) {
+      showGlitchError("Wallet connection cancelled");
+    }
+  }, [connectedWallet, showGlitchError]);
 
   const triggerDemoSurge = useCallback(async () => {
     try {
@@ -605,8 +628,10 @@ export default function App() {
           isDemoMode={isDemoMode}
           judgeMode={judgeMode}
           signalCount={events.length}
+          connectedWallet={connectedWallet}
           onToggleJudgeMode={() => setJudgeMode((previous) => !previous)}
           onResetView={handleResetView}
+          onConnectWallet={() => void handleConnectWallet()}
         />
 
         <motion.main
