@@ -785,6 +785,7 @@ export default function App() {
                 addingWatchToken={addingWatchToken}
                 latestLatency={latestLatency}
                 events={events}
+                connectedWallet={connectedWallet}
               />
             </motion.div>
           ) : activeSection === "rugcheck" ? (

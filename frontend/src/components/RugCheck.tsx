@@ -76,7 +76,7 @@ function RiskGauge({ score }: { score: number }) {
     );
 }
 
-function CheckCard({ check }: { check: CheckResult }) {
+function CheckCard({ check }: { check: CheckResult, key?: React.Key }) {
     const cfg = STATUS_CONFIG[check.status];
     const Icon = CHECK_ICONS[check.id] || Shield;
     const StatusIcon = cfg.icon;

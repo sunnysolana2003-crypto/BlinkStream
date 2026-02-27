@@ -28,6 +28,8 @@ const {
   addAutonomousToken,
   removeAutonomousToken
 } = require("../jobs/autonomous.job");
+const { getWalletPortfolio } = require("../services/portfolio.service");
+const { inspectTransaction } = require("../services/txInspector.service");
 
 const router = express.Router();
 const DEFAULT_EXPLORER_ADDRESS = String(
@@ -202,28 +204,23 @@ router.post("/orbitflare/websocket/probe", async (req, res, next) => {
   }
 });
 
-router.post("/orbitflare/tx-submit", async (req, res, next) => {
+router.get("/wallet/pnl", async (req, res, next) => {
   try {
-    const signedTransaction = String(
-      req.body?.signedTransaction || req.body?.signedTxBase64 || req.body?.transaction || ""
-    ).trim();
-    if (!signedTransaction) {
-      return res.status(400).json({
-        success: false,
-        error: "signedTransaction is required and must be base64"
-      });
+    const address = resolveValidatedAddress(req.query.address);
+    const payload = await getWalletPortfolio(address);
+    return res.json(payload);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get("/tx/inspect", async (req, res, next) => {
+  try {
+    const signature = String(req.query.signature || "").trim();
+    if (!signature) {
+      return res.status(400).json({ error: "signature is required" });
     }
-
-    const payload = await submitOrbitFlareSignedTransaction({
-      signedTransaction,
-      skipPreflight: req.body?.skipPreflight,
-      maxRetries: req.body?.maxRetries,
-      preflightCommitment: req.body?.preflightCommitment,
-      confirmTimeoutMs: req.body?.confirmTimeoutMs,
-      sendTimeoutMs: req.body?.sendTimeoutMs,
-      statusTimeoutMs: req.body?.statusTimeoutMs
-    });
-
+    const payload = await inspectTransaction(signature);
     return res.json(payload);
   } catch (error) {
     return next(error);
