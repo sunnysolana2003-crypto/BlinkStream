@@ -90,22 +90,51 @@ function extractWalletAddress(provider: GenericWalletProvider, response: WalletC
   return "";
 }
 
-function resolveWalletProvider(win: WalletWindow) {
-  const candidates: Array<{ name: string; provider: GenericWalletProvider | undefined }> = [
+function getWalletProviderCandidates(win: WalletWindow) {
+  const byPreference: Array<{ name: string; provider: GenericWalletProvider | undefined }> = [
+    // Solflare-first to avoid Phantom-first dead-ends when user expects Solflare popup.
+    { name: "Solflare", provider: win.solflare },
+    { name: "Solflare", provider: win.solana?.isSolflare ? win.solana : undefined },
     { name: "Phantom", provider: win.phantom?.solana },
     { name: "Phantom", provider: win.solana?.isPhantom ? win.solana : undefined },
-    { name: "Solflare", provider: win.solflare },
     { name: "Backpack", provider: win.backpack?.solana },
     { name: "Solana Wallet", provider: win.solana }
   ];
 
-  for (const candidate of candidates) {
-    if (candidate.provider && typeof candidate.provider.connect === "function") {
-      return candidate;
+  const seen = new Set<GenericWalletProvider>();
+  const candidates: Array<{ name: string; provider: GenericWalletProvider }> = [];
+
+  for (const candidate of byPreference) {
+    if (!candidate.provider || typeof candidate.provider.connect !== "function") {
+      continue;
     }
+
+    if (seen.has(candidate.provider)) {
+      continue;
+    }
+
+    seen.add(candidate.provider);
+    candidates.push({ name: candidate.name, provider: candidate.provider });
   }
 
-  return null;
+  return candidates;
+}
+
+async function connectProvider(provider: GenericWalletProvider) {
+  if (typeof provider.connect !== "function") {
+    return null;
+  }
+
+  try {
+    return await provider.connect();
+  } catch (error) {
+    const message = String((error as { message?: string })?.message || "");
+    // Some providers accept options-only signatures; retry once with explicit options.
+    if (/argument|options|onlyiftrusted/i.test(message)) {
+      return provider.connect({ onlyIfTrusted: false });
+    }
+    throw error;
+  }
 }
 
 function normalizeUserTokenInput(value: string) {
@@ -587,36 +616,50 @@ export default function App() {
     }
     try {
       const win = window as WalletWindow;
-      const resolved = resolveWalletProvider(win);
-
-      if (!resolved) {
+      const candidates = getWalletProviderCandidates(win);
+      if (!candidates.length) {
         showGlitchError("No Solana wallet found — install Phantom or Solflare");
         return;
       }
 
-      const response = await resolved.provider.connect?.({ onlyIfTrusted: false });
-      const address = extractWalletAddress(resolved.provider, response || null);
+      let lastErrorMessage = "";
+      for (const candidate of candidates) {
+        try {
+          const response = await connectProvider(candidate.provider);
+          const address = extractWalletAddress(candidate.provider, response || null);
 
-      if (!address) {
-        showGlitchError(`${resolved.name} connected but no wallet address was returned`);
-        return;
+          if (!address) {
+            lastErrorMessage = `${candidate.name} connected but no wallet address was returned`;
+            continue;
+          }
+
+          setConnectedWallet(address);
+          return;
+        } catch (error) {
+          const code = (error as { code?: number })?.code;
+          const message = String((error as { message?: string })?.message || "");
+
+          if (code === -32002 || /already processing|pending/i.test(message)) {
+            showGlitchError(`${candidate.name} approval is pending. Check wallet popup/extension`);
+            return;
+          }
+
+          if (code === 4001 || code === 4100 || /rejected|cancelled|canceled/i.test(message)) {
+            // User may have rejected one wallet; try next detected provider.
+            lastErrorMessage = `${candidate.name} request was rejected`;
+            continue;
+          }
+
+          lastErrorMessage = message || `${candidate.name} connection failed`;
+        }
       }
 
-      setConnectedWallet(address);
+      showGlitchError(
+        lastErrorMessage
+          ? `Could not connect wallet: ${lastErrorMessage}`
+          : "Could not connect wallet — unlock extension and approve the request"
+      );
     } catch (error) {
-      const code = (error as { code?: number })?.code;
-      const message = String((error as { message?: string })?.message || "");
-
-      if (code === 4001 || code === 4100 || /rejected|cancelled|canceled/i.test(message)) {
-        // User rejected the request.
-        return;
-      }
-
-      if (code === -32002 || /already processing|pending/i.test(message)) {
-        showGlitchError("Wallet approval is already pending. Check your wallet popup");
-        return;
-      }
-
       showGlitchError("Could not connect wallet — unlock extension and approve the request");
     }
   }, [connectedWallet, showGlitchError]);
