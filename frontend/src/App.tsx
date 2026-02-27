@@ -544,7 +544,7 @@ export default function App() {
   }, [supportedTokens, tokenDisplayNames]);
 
   const handleGenerateBlink = useCallback(
-    async ({ token, actionType, amount }: GenerateBlinkInput) => {
+    async ({ token, actionType, amount, receiver }: GenerateBlinkInput) => {
       setGeneratingBlink(true);
 
       try {
@@ -559,6 +559,10 @@ export default function App() {
 
         if (connectedWallet) {
           payload.userPublicKey = connectedWallet;
+        }
+
+        if (receiver) {
+          payload.receiver = receiver;
         }
 
         let response;

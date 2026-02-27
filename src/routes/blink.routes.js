@@ -159,7 +159,7 @@ function validateBlinkPayload(req, res, next) {
 
 async function handleGenerate(req, res, next) {
   try {
-    const { token = "SOL", actionType = "swap", amount, userPublicKey } = req.body || {};
+    const { token = "SOL", actionType = "swap", amount, userPublicKey, receiver } = req.body || {};
     const baseUrl = getRequestBaseUrl(req);
     const normalizedToken = String(token || "SOL").trim();
 
@@ -168,7 +168,8 @@ async function handleGenerate(req, res, next) {
       actionType,
       amount: Number(amount) || undefined,
       baseUrl,
-      userPublicKey: typeof userPublicKey === "string" && userPublicKey.trim() ? userPublicKey.trim() : undefined
+      userPublicKey: typeof userPublicKey === "string" && userPublicKey.trim() ? userPublicKey.trim() : undefined,
+      receiver: typeof receiver === "string" && receiver.trim() ? receiver.trim() : undefined
     });
 
     const persistence = await storeBlinkForUser({
