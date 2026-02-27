@@ -191,6 +191,14 @@ async function getMintDecimals(mintAddress) {
 }
 
 async function getMintPriceViaJupiter(mintAddress) {
+  // 0. Short-circuit for standard tokens to avoid invalid same-mint quotes
+  if (mintAddress === USDC_MINT) {
+    return 1.0;
+  }
+  if (mintAddress === "So11111111111111111111111111111111111111112") {
+    return await getSolPrice();
+  }
+
   const decimals = await getMintDecimals(mintAddress);
   const exponent = Math.min(decimals, 9);
   const rawAmount = Math.max(1, Math.floor(Math.pow(10, exponent)));
