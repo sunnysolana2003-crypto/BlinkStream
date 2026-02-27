@@ -4,7 +4,7 @@ const axios = require("axios");
 const logger = require("../utils/logger");
 
 const METADATA_PROGRAM_ID = new PublicKey("metaqb7iiNo7366mCcS3eRpk9pSa5124YXMTX4P6sen");
-const TOKEN_2022_PROGRAM_ID = new PublicKey("TokenzQdBNbLqP5VEhdkAS6EP2rHE8229L8KsSsh7");
+const TOKEN_2022_PROGRAM_ID = new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 
 const RISK_WEIGHTS = {
     mintAuthorityActive: 35,
