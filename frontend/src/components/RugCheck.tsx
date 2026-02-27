@@ -144,7 +144,47 @@ export function RugCheck() {
                 </div>
                 <div>
                     <h2 className="text-sm font-bold tracking-widest text-white">RUG CHECKER</h2>
-                    <p className="text-[11px] text-gray-400 font-mono">On-chain SPL token risk analysis via OrbitFlare RPC</p>
+                    <p className="text-[11px] text-gray-400 font-mono">Expert-grade on-chain analysis with loophole detection</p>
+                </div>
+            </div>
+
+            {/* Features Description */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
+                <div className="p-3 rounded-2xl bg-white/[0.02] border border-white/5">
+                    <div className="flex items-center gap-2 mb-2">
+                        <Flame className="w-3.5 h-3.5 text-[#ff6a00]" />
+                        <span className="text-[10px] font-bold text-gray-300 tracking-wider">LP LOCK & BURN</span>
+                    </div>
+                    <p className="text-[10px] text-gray-500 font-mono leading-relaxed">
+                        Detects Raydium pools and verifies if liquidity is permanently burned (1111...) or locked. Prevents pull-exits.
+                    </p>
+                </div>
+                <div className="p-3 rounded-2xl bg-white/[0.02] border border-white/5">
+                    <div className="flex items-center gap-2 mb-2">
+                        <Search className="w-3.5 h-3.5 text-[#00f3ff]" />
+                        <span className="text-[10px] font-bold text-gray-300 tracking-wider">METADATA MUTABILITY</span>
+                    </div>
+                    <p className="text-[10px] text-gray-500 font-mono leading-relaxed">
+                        Checks if the creator can change the token's identity (Name/Symbol/URI) post-launch to mimic legitimate projects.
+                    </p>
+                </div>
+                <div className="p-3 rounded-2xl bg-white/[0.02] border border-white/5">
+                    <div className="flex items-center gap-2 mb-2">
+                        <Lock className="w-3.5 h-3.5 text-purple-400" />
+                        <span className="text-[10px] font-bold text-gray-300 tracking-wider">TOKEN-2022 AUDIT</span>
+                    </div>
+                    <p className="text-[10px] text-gray-500 font-mono leading-relaxed">
+                        Advanced scanning for "Permanent Delegate" and "Transfer Fee" loopholes that allow balance seizure or massive sell-taxes.
+                    </p>
+                </div>
+                <div className="p-3 rounded-2xl bg-white/[0.02] border border-white/5">
+                    <div className="flex items-center gap-2 mb-2">
+                        <Users className="w-3.5 h-3.5 text-[#ff007f]" />
+                        <span className="text-[10px] font-bold text-gray-300 tracking-wider">DEX-FILTERED WHALES</span>
+                    </div>
+                    <p className="text-[10px] text-gray-500 font-mono leading-relaxed">
+                        Filters out DEX liquidity accounts from holder lists to reveal real whale concentration and dump risks.
+                    </p>
                 </div>
             </div>
 
