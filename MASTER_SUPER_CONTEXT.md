@@ -8,13 +8,14 @@ This file is the authoritative context map for any LLM working on this codebase.
 
 BlinkStream is a real-time Solana signal + execution assistant:
 
-- Ingest chain activity from OrbitFlare gRPC
-- Detect large swaps and price surges
-- Generate Action Blinks with measured latency
+- Ingest chain activity from OrbitFlare gRPC (Yellowstone)
+- Detect large swaps and institutional "Whale" moves (>$25k)
+- Real-time Priority Fee optimization (Network percentiles + Jito tips)
+- Generate Action Blinks with lightning-fast quote integration
 - Broadcast events to frontend via Socket.IO
-- Support deterministic demo mode
-- Wallet-connected blink simulation (user's Phantom/Solflare/Backpack wallet)
+- Wallet-connected blink simulation (Phantom/Solflare/Backpack)
 - On-chain token rug risk analysis
+- Unified Trader Hub: One-stop shop for Alpha, Portfolio, and Fees
 
 The frontend is a professional trading console UI. The backend and frontend are deployed as a **single unified service on Render** — Express serves the React `dist/` build directly.
 
@@ -102,9 +103,15 @@ npm run dev
 - `src/jobs/stream.job.js` — stream subscribe/consume/reconnect loop, signature dedupe
 - `src/jobs/autonomous.job.js` — 5s polling, surge-to-blink pipeline, anti-spam guard (60s)
 - `src/services/price.service.js` — Hermes pricing (or demo pricing)
+  - **Hardened Resolution**: Short-circuits USDC (`EPjFW...`) and SOL mints directly to avoid invalid same-mint quote requests to Jupiter.
 - `src/services/surgeEngine.service.js` — surge threshold/cooldown state machine
 - `src/services/jupiter.service.js` — quote retrieval + timeout guard
-  - Accepts optional `userPublicKey` for swap simulation against user's wallet
+- `src/services/whale.service.js` (**NEW**) — Institutional move detector
+  - Uses gRPC (Yellowstone) to find moves >$25k USD or >100 SOL.
+  - Maintains 200-item ring buffer for live feed persistence.
+- `src/services/priorityFee.service.js` (**NEW**) — Network optimizer
+  - Polls Solana RPC for fee percentiles and Jito public API for Tip floors.
+  - Provides 3-tier actionable recommendations (Safe/Standard/Turbo).
 - `src/services/simulation.service.js` — simulation + timeout guard
 - `src/services/blink.service.js` — blink generation and latency packaging
   - `generateBlink(options)` now accepts and passes through `userPublicKey`
@@ -120,9 +127,10 @@ npm run dev
   - Returns 0–100 risk score with per-check SAFE/WARN/DANGER labels
 - `src/routes/health.routes.js` — health snapshot + stream status
 - `src/routes/auth.routes.js` — register/login + validation
-- `src/routes/blink.routes.js` — blink generation endpoint; now accepts `userPublicKey` in body
+- `src/routes/blink.routes.js` — blink generation endpoint
 - `src/routes/demo.routes.js` — demo trigger endpoint
-- `src/routes/rugCheck.routes.js` (**NEW**) — `GET /api/rug-check?mint=<address>`
+- `src/routes/rugCheck.routes.js` — `GET /api/rug-check?mint=<address>`
+- `src/routes/metrics.routes.js` — **PRUNED**: Focuses on Surge, Autonomous, Whale, and Priority Fee APIs. Legacy Orbitflare probes/usage/scoring removed for professional focus.
 - `src/sockets/socket.js` — singleton socket + emit wrapper
 - `src/utils/logger.js` — structured logging wrapper
 
@@ -165,9 +173,15 @@ Frontend root: `frontend/` (renamed from `blinkstream-trader (Frontend)/`)
 - `src/components/EventStream.tsx` — live surge/large-swap feed
 - `src/components/SurgeAlert.tsx` — animated surge alert
 - `src/components/LatencyMetrics.tsx` — RPC latency, blink total, slot/network
-- `src/components/Sidebar.tsx` — navigation; now includes **Rug Checker** section (`rugcheck`)
-- `src/components/OrbitflareExplorer.tsx` — Trader Intelligence Hub
-- `src/components/JudgeBriefing.tsx` — judge/demo mode view
+- `src/components/OrbitflareExplorer.tsx` — **Trader Intelligence Hub**
+  - Consolidated into 6 High-Alpha modules:
+    1. **Overview / Watchlist** (Simplified, focus on signals)
+    2. **Portfolio & P&L** (Live wallet valuation)
+    3. **Whale Stream** (gRPC detection feed)
+    4. **Priority Fees** (Jito-aware fee gauge)
+    5. **Transaction Inspector** (On-chain decoding)
+    6. **Settings** (Surge & Autonomous config)
+- `src/components/JudgeBriefing.tsx` — **PRUNED**: Engineering debug metrics (usage/relay probes) removed to focus on signal-to-action flow.
 
 ### 5.3 Wallet Connection Flow
 
@@ -196,14 +210,12 @@ GET  /api/metrics/surge-settings
 PUT  /api/metrics/surge-settings
 GET  /api/metrics/autonomous-tokens
 POST /api/metrics/autonomous-tokens
+GET  /api/metrics/whale/history     ← NEW (ring buffer)
+GET  /api/metrics/priority-fees      ← NEW (Jito + RPC)
 GET  /api/price?token=SOL
-GET  /api/price/supported?limit=20
-POST /api/blinks              (primary)
-POST /api/blinks/generate     (fallback alias)
-GET  /api/blinks/action       (Solana Actions query)
-POST /api/blinks/action       (Solana Actions execute — accepts `account` = user pubkey)
+POST /api/blinks
 POST /api/demo/trigger
-GET  /api/rug-check?mint=<address>   ← NEW
+GET  /api/rug-check?mint=<address>
 ```
 
 ---
@@ -315,8 +327,9 @@ Payload shape:
 ## 12) Known Caveats
 
 - `@kdt-sol/solana-grpc-client` enforces `pnpm` via `only-allow` preinstall script — use `--ignore-scripts` flag on all `npm install` calls during deployment
-- OrbitFlare Starter plan rejects `accountInclude` filter → switches to broad TX feed with local SPL parsing (logged as WARN, not an error)
-- `HACKATHON_SIM_PUBLIC_KEY` left blank → random keypair → Jupiter simulation returns `AccountNotFound`. Fixed by: user connecting wallet (preferred) or setting env var.
+- `node-fetch` and `@solana/spl-token` must be present in root `package.json` for backend services (Whale Watch, Portfolio).
+- USDC Mint (`EPjFW...`) fails same-mint quote: Logic now short-circuits this in `price.service.js`.
+- OrbitFlare Starter plan rejects `accountInclude` filter → switches to broad TX feed.
 
 ---
 
