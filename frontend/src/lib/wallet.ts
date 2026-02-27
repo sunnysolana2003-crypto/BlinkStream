@@ -1,12 +1,3 @@
-function isLikelyMobile() {
-  if (typeof navigator === "undefined") {
-    return false;
-  }
-
-  const userAgent = navigator.userAgent.toLowerCase();
-  return /iphone|ipad|ipod|android|mobile/.test(userAgent);
-}
-
 function safelyDecode(value: string) {
   try {
     return decodeURIComponent(value);
@@ -114,12 +105,11 @@ export function getBlinkOpenUrl(blinkUrl: string) {
   }
 
   const actionProtocolUrl = extractActionProtocolUrl(normalizedBlinkUrl);
+  const solflareBrowseUrl = buildSolflareBrowseUrl(normalizedBlinkUrl);
 
-  if (isLikelyMobile()) {
-    const solflareBrowseUrl = buildSolflareBrowseUrl(normalizedBlinkUrl);
-    if (solflareBrowseUrl) {
-      return solflareBrowseUrl;
-    }
+  // Prefer Solflare browse URL for both mobile and desktop flows.
+  if (solflareBrowseUrl) {
+    return solflareBrowseUrl;
   }
 
   if (actionProtocolUrl) {

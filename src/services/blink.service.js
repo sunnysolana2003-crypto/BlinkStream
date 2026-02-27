@@ -115,6 +115,8 @@ function createActionBlinkUrl({ token, actionType, amount, inputMint, outputMint
   actionLink.searchParams.set("inputMint", inputMint);
   actionLink.searchParams.set("outputMint", outputMint);
   actionLink.searchParams.set("network", process.env.SOLANA_NETWORK || "mainnet-beta");
+  // Force JSON response for wallet/Blink clients even if Accept includes text/html.
+  actionLink.searchParams.set("format", "json");
 
   if (actionLink.protocol !== "https:") {
     return actionLink.toString();
@@ -133,7 +135,8 @@ function createActionBlinkUrl({ token, actionType, amount, inputMint, outputMint
     return actionLink.toString();
   }
 
-  const payload = `solana-action:${encodeURIComponent(actionLink.toString())}`;
+  // Keep single URL-encoding layer by letting URLSearchParams encode the full value.
+  const payload = `solana-action:${actionLink.toString()}`;
   wrapperBase.searchParams.set("action", payload);
   return wrapperBase.toString();
 }

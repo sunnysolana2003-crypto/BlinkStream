@@ -52,7 +52,7 @@ function buildBlinkWrapperUrl(actionUrl) {
 
   try {
     const wrapper = new URL(wrapperUrl);
-    wrapper.searchParams.set("action", `solana-action:${encodeURIComponent(actionUrl)}`);
+    wrapper.searchParams.set("action", `solana-action:${actionUrl}`);
     return wrapper.toString();
   } catch (error) {
     logger.warn("Invalid BLINK_WRAPPER_URL for human page:", error.message);
@@ -159,9 +159,10 @@ async function handleGenerate(req, res, next) {
   try {
     const { token = "SOL", actionType = "swap", amount, userPublicKey } = req.body || {};
     const baseUrl = getRequestBaseUrl(req);
+    const normalizedToken = String(token || "SOL").trim();
 
     const blink = await generateBlink({
-      token: token.toUpperCase(),
+      token: normalizedToken,
       actionType,
       amount: Number(amount) || undefined,
       baseUrl,
@@ -170,7 +171,7 @@ async function handleGenerate(req, res, next) {
 
     const persistence = await storeBlinkForUser({
       userId: PUBLIC_USER_ID,
-      token: token.toUpperCase(),
+      token: normalizedToken,
       actionType,
       blink
     });
