@@ -293,19 +293,28 @@ async function generateBlink(options = {}) {
   let quoteLatency;
   let simulationLatency;
 
-  const quoteResult = await getQuote({ inputMint, outputMint, amount });
-  const swapResult = await getSwapTransaction({
-    quote: quoteResult.quote,
-    quoteUrl: quoteResult.quoteUrl,
-    userPublicKey
-  });
-  quoteLatency = quoteResult.latency + swapResult.latency;
+  // For direct transfer actions (donate/mint), skip Jupiter quote/swap — not needed.
+  const isDirectAction = ["donate", "mint"].includes(actionType.toLowerCase());
 
-  const simulationInput = swapResult.success
-    ? { swapTransaction: swapResult.swapTransaction }
-    : quoteResult.quote;
-  const simulationResult = await simulateSwap(simulationInput);
-  simulationLatency = simulationResult.latency;
+  if (!isDirectAction) {
+    const quoteResult = await getQuote({ inputMint, outputMint, amount });
+    const swapResult = await getSwapTransaction({
+      quote: quoteResult.quote,
+      quoteUrl: quoteResult.quoteUrl,
+      userPublicKey
+    });
+    quoteLatency = quoteResult.latency + swapResult.latency;
+
+    const simulationInput = swapResult.success
+      ? { swapTransaction: swapResult.swapTransaction }
+      : quoteResult.quote;
+    const simulationResult = await simulateSwap(simulationInput);
+    simulationLatency = simulationResult.latency;
+  } else {
+    // Direct transfer — no quote/simulation needed
+    quoteLatency = 0;
+    simulationLatency = 0;
+  }
 
   const blinkStart = Date.now();
   let blinkUrl;
