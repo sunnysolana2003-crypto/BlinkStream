@@ -107,7 +107,14 @@ async function getLPStatus(mintAddress) {
 async function runRugCheck(mintAddress) {
     const start = Date.now();
     const pubkey = new PublicKey(mintAddress);
-    const info = await getConn().getParsedAccountInfo(pubkey);
+
+    let info;
+    try {
+        info = await getConn().getParsedAccountInfo(pubkey);
+    } catch (err) {
+        logger.error(`Failed to fetch mint info for ${mintAddress}: ${err.message}`);
+        throw new Error(`RPC Error: ${err.message}`);
+    }
 
     if (!info?.value?.data || typeof info.value.data !== "object" || !("parsed" in info.value.data)) {
         throw new Error("Not a valid SPL token mint address");
@@ -129,11 +136,23 @@ async function runRugCheck(mintAddress) {
     const humanSupply = rawSupply / Math.pow(10, decimals || 0);
 
     // Parallel checks for efficiency
-    const [metadata, lpStatus, largestAccounts] = await Promise.all([
-        getMetadataStatus(mintAddress),
-        getLPStatus(mintAddress),
-        getConn().getTokenLargestAccounts(pubkey)
-    ]);
+    let metadata, lpStatus, largestAccounts;
+    try {
+        const results = await Promise.allSettled([
+            getMetadataStatus(mintAddress),
+            getLPStatus(mintAddress),
+            getConn().getTokenLargestAccounts(pubkey)
+        ]);
+
+        metadata = results[0].status === 'fulfilled' ? results[0].value : { exists: false, isMutable: true };
+        lpStatus = results[1].status === 'fulfilled' ? results[1].value : { found: false, lpBurned: false, liquidity: 0 };
+        largestAccounts = results[2].status === 'fulfilled' ? results[2].value : { value: [] };
+    } catch (err) {
+        logger.warn(`Parallel checks partially failed for ${mintAddress}: ${err.message}`);
+        metadata = { exists: false, isMutable: true };
+        lpStatus = { found: false, lpBurned: false, liquidity: 0 };
+        largestAccounts = { value: [] };
+    }
 
     const topHolders = largestAccounts?.value || [];
     const top1Amount = topHolders[0] ? Number(topHolders[0].uiAmount || 0) : 0;
@@ -194,7 +213,9 @@ async function runRugCheck(mintAddress) {
             id: "concentration",
             label: "Whale Analysis",
             status: flags.top1HolderOver50pct ? "DANGER" : flags.top5HoldersOver80pct ? "WARN" : "SAFE",
-            detail: `Top 1 holds ${top1Pct.toFixed(1)}% | Top 5 hold ${top5Pct.toFixed(1)}%`,
+            detail: topHolders.length > 0
+                ? `Top 1 holds ${top1Pct.toFixed(1)}% | Top 5 hold ${top5Pct.toFixed(1)}%`
+                : "Could not fetch holder data (RPC limit)",
         }
     ];
 
