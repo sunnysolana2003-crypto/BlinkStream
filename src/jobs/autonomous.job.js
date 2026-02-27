@@ -94,7 +94,7 @@ async function buildAndDispatchSurgeEvent({ token, changePercent, usdValue, slot
 
   const blink = await generateBlink({
     token,
-    actionType: "swap"
+    actionType: "buy"
   });
 
   const event = buildStandardEvent({

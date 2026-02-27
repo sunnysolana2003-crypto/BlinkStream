@@ -1,8 +1,10 @@
-const { Connection, PublicKey } = require("@solana/web3.js");
+const { PublicKey } = require("@solana/web3.js");
+const { getConnection } = require("../config/rpc.config");
 const logger = require("../utils/logger");
 
-const RPC_URL = process.env.ORBITFLARE_RPC_URL || "https://api.mainnet-beta.solana.com";
-const connection = new Connection(RPC_URL, "confirmed");
+function getConn() {
+    return getConnection();
+}
 
 const RISK_WEIGHTS = {
     mintAuthorityActive: 35,
@@ -36,7 +38,7 @@ function formatSupply(raw, decimals) {
 
 async function getMintInfo(mintAddress) {
     const pubkey = new PublicKey(mintAddress);
-    const info = await connection.getParsedAccountInfo(pubkey);
+    const info = await getConn().getParsedAccountInfo(pubkey);
 
     if (!info?.value?.data || typeof info.value.data !== "object" || !("parsed" in info.value.data)) {
         throw new Error("Not a valid SPL token mint address");
@@ -52,7 +54,7 @@ async function getMintInfo(mintAddress) {
 
 async function getTopHolders(mintAddress) {
     const pubkey = new PublicKey(mintAddress);
-    const result = await connection.getTokenLargestAccounts(pubkey);
+    const result = await getConn().getTokenLargestAccounts(pubkey);
     return result?.value || [];
 }
 

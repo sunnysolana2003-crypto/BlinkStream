@@ -213,6 +213,39 @@ function resolveOutputMint(inputMint, providedOutputMint) {
   return DEFAULT_OUTPUT_MINT;
 }
 
+function resolveTradeMints({ token, actionType, providedInputMint, providedOutputMint }) {
+  const normalizedAction = String(actionType || "swap").toLowerCase();
+  const targetMint = resolveInputMint(token, null);
+
+  if (normalizedAction === "buy") {
+    const outputMint = providedOutputMint && typeof providedOutputMint === "string"
+      ? providedOutputMint.trim()
+      : targetMint;
+    const inputMint = providedInputMint && typeof providedInputMint === "string"
+      ? providedInputMint.trim()
+      : outputMint === DEFAULT_INPUT_MINT
+        ? DEFAULT_OUTPUT_MINT
+        : DEFAULT_INPUT_MINT;
+    return { inputMint, outputMint };
+  }
+
+  if (normalizedAction === "sell") {
+    const inputMint = providedInputMint && typeof providedInputMint === "string"
+      ? providedInputMint.trim()
+      : targetMint;
+    const outputMint = providedOutputMint && typeof providedOutputMint === "string"
+      ? providedOutputMint.trim()
+      : inputMint === DEFAULT_OUTPUT_MINT
+        ? DEFAULT_INPUT_MINT
+        : DEFAULT_OUTPUT_MINT;
+    return { inputMint, outputMint };
+  }
+
+  const inputMint = resolveInputMint(token, providedInputMint);
+  const outputMint = resolveOutputMint(inputMint, providedOutputMint);
+  return { inputMint, outputMint };
+}
+
 function resolveBlinkTradeParams(options = {}) {
   const rawToken = String(options.token || "SOL").trim();
   const customMint = isValidMintAddress(rawToken);
@@ -220,8 +253,12 @@ function resolveBlinkTradeParams(options = {}) {
   const normalizedActionType = normalizeActionType(options.actionType || "swap");
   const actionType = normalizedActionType.toUpperCase();
   const amount = toRawAmount(options.amount, token, Boolean(options.rawAmount));
-  const inputMint = resolveInputMint(token, options.inputMint);
-  const outputMint = resolveOutputMint(inputMint, options.outputMint);
+  const { inputMint, outputMint } = resolveTradeMints({
+    token,
+    actionType: normalizedActionType,
+    providedInputMint: options.inputMint,
+    providedOutputMint: options.outputMint
+  });
 
   return {
     token,
