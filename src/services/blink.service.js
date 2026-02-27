@@ -107,7 +107,7 @@ function resolveActionEndpoint(baseUrl) {
   return new URL(DEFAULT_ACTION_PATH, `http://localhost:${fallbackPort}`);
 }
 
-function createActionBlinkUrl({ token, actionType, amount, inputMint, outputMint, baseUrl }) {
+function createActionBlinkUrl({ token, actionType, amount, inputMint, outputMint, baseUrl, receiver }) {
   const actionLink = resolveActionEndpoint(baseUrl);
   actionLink.searchParams.set("token", token);
   actionLink.searchParams.set("actionType", actionType.toLowerCase());
@@ -117,6 +117,11 @@ function createActionBlinkUrl({ token, actionType, amount, inputMint, outputMint
   actionLink.searchParams.set("network", process.env.SOLANA_NETWORK || "mainnet-beta");
   // Force JSON response for wallet/Blink clients even if Accept includes text/html.
   actionLink.searchParams.set("format", "json");
+
+  // For Donate/Mint: embed the receiver address so the action endpoint can build a direct transfer.
+  if (receiver && typeof receiver === "string" && receiver.trim()) {
+    actionLink.searchParams.set("receiver", receiver.trim());
+  }
 
   if (actionLink.protocol !== "https:") {
     return actionLink.toString();
@@ -280,6 +285,9 @@ async function generateBlink(options = {}) {
   const userPublicKey = typeof options.userPublicKey === "string" && options.userPublicKey.trim()
     ? options.userPublicKey.trim()
     : undefined;
+  const receiver = typeof options.receiver === "string" && options.receiver.trim()
+    ? options.receiver.trim()
+    : undefined;
   const totalStart = Date.now();
 
   let quoteLatency;
@@ -312,7 +320,8 @@ async function generateBlink(options = {}) {
         amount,
         inputMint,
         outputMint,
-        baseUrl: options.baseUrl
+        baseUrl: options.baseUrl,
+        receiver
       });
     } catch (error) {
       logger.error("Blink URL creation failed:", error.message);

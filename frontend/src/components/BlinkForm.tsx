@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { Zap, Link as LinkIcon, Copy, Check, Wallet } from "lucide-react";
+import { Zap, Link as LinkIcon, Copy, Check } from "lucide-react";
 import { BlinkLatency, GenerateBlinkInput } from "../types/backend";
-import { buildSolflareBrowseUrl, openBlinkInWallet } from "../lib/wallet";
+import { openBlinkInWallet } from "../lib/wallet";
 
 interface BlinkFormProps {
   onGenerate: (input: GenerateBlinkInput) => Promise<string | null>;
@@ -31,12 +31,14 @@ function normalizeTokenValue(value: string) {
 
 export function BlinkForm({ onGenerate, generating, blinkUrl, latency, defaultToken, supportedTokens }: BlinkFormProps) {
   const [copied, setCopied] = useState(false);
-  const [actionType, setActionType] = useState("TRADE");
+  const [actionType, setActionType] = useState("SWAP");
   const [token, setToken] = useState(defaultToken || "SOL");
   const [amount, setAmount] = useState("10");
+  const [receiver, setReceiver] = useState("");
+
+  const isDirectTransfer = actionType === "DONATE" || actionType === "MINT";
 
   const hasBlink = useMemo(() => Boolean(blinkUrl), [blinkUrl]);
-  const solflareUrl = useMemo(() => buildSolflareBrowseUrl(blinkUrl), [blinkUrl]);
 
   useEffect(() => {
     if (defaultToken) {
@@ -50,7 +52,8 @@ export function BlinkForm({ onGenerate, generating, blinkUrl, latency, defaultTo
     await onGenerate({
       token,
       actionType,
-      amount: Number.isFinite(parsedAmount) && parsedAmount > 0 ? parsedAmount : undefined
+      amount: Number.isFinite(parsedAmount) && parsedAmount > 0 ? parsedAmount : undefined,
+      ...(isDirectTransfer && receiver.trim() ? { receiver: receiver.trim() } : {})
     });
   }
 
@@ -90,11 +93,10 @@ export function BlinkForm({ onGenerate, generating, blinkUrl, latency, defaultTo
                 whileTap={{ scale: 0.98 }}
                 key={type}
                 onClick={() => setActionType(type)}
-                className={`py-2 text-xs font-bold rounded-lg border transition-colors ${
-                  actionType === type
-                    ? "bg-[#00f3ff]/20 border-[#00f3ff]/50 text-[#00f3ff] shadow-[0_0_10px_rgba(0,243,255,0.2)]"
-                    : "bg-black/40 border-white/10 text-gray-400 hover:border-white/30 hover:text-white"
-                }`}
+                className={`py-2 text-xs font-bold rounded-lg border transition-colors ${actionType === type
+                  ? "bg-[#00f3ff]/20 border-[#00f3ff]/50 text-[#00f3ff] shadow-[0_0_10px_rgba(0,243,255,0.2)]"
+                  : "bg-black/40 border-white/10 text-gray-400 hover:border-white/30 hover:text-white"
+                  }`}
               >
                 {type}
               </motion.button>
@@ -139,6 +141,29 @@ export function BlinkForm({ onGenerate, generating, blinkUrl, latency, defaultTo
           </div>
         </div>
 
+        {/* Receiver address field — shown only for DONATE and MINT */}
+        {isDirectTransfer && (
+          <div>
+            <label className="text-xs mb-1 flex items-center gap-1.5 font-bold" style={{ color: actionType === "DONATE" ? "#ff7db9" : "#a78bfa" }}>
+              {actionType === "DONATE" ? "🎁" : "✨"} RECEIVER WALLET ADDRESS
+              <span className="text-gray-500 font-normal">(required)</span>
+            </label>
+            <motion.input
+              whileFocus={{ scale: 1.01, boxShadow: "0 0 15px rgba(188,19,254,0.2)" }}
+              type="text"
+              value={receiver}
+              onChange={(event) => setReceiver(event.target.value)}
+              placeholder={actionType === "DONATE" ? "Recipient's Solana wallet address..." : "Project mint authority / treasury wallet..."}
+              className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-3 text-xs font-mono text-white outline-none focus:border-[#bc13fe]/50 transition-all placeholder:text-gray-600"
+            />
+            <p className="text-[10px] font-mono mt-1.5" style={{ color: actionType === "DONATE" ? "#ff7db980" : "#a78bfa80" }}>
+              {actionType === "DONATE"
+                ? "Funds will be sent directly on-chain to this address (SOL or SPL transfer)."
+                : "Mint funds will be transferred directly to this project treasury address."}
+            </p>
+          </div>
+        )}
+
         <motion.button
           whileHover={{ scale: 1.02, boxShadow: "0 0 20px rgba(188,19,254,0.4)" }}
           whileTap={{ scale: 0.98 }}
@@ -176,43 +201,6 @@ export function BlinkForm({ onGenerate, generating, blinkUrl, latency, defaultTo
           </button>
         </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          <motion.button
-            whileHover={{ scale: hasBlink ? 1.02 : 1 }}
-            whileTap={{ scale: hasBlink ? 0.98 : 1 }}
-            onClick={() => openBlinkInWallet(blinkUrl)}
-            disabled={!hasBlink}
-            className="rounded-lg border border-[#ff6a00]/40 bg-[#ff6a00]/15 px-3 py-2 text-xs font-bold tracking-widest text-[#ffb37d] hover:bg-[#ff6a00]/25 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            <Wallet className="w-4 h-4" />
-            OPEN IN WALLET
-          </motion.button>
-
-          <motion.a
-            whileHover={{ scale: hasBlink ? 1.02 : 1 }}
-            whileTap={{ scale: hasBlink ? 0.98 : 1 }}
-            href={hasBlink ? solflareUrl : undefined}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(event) => {
-              if (!hasBlink) {
-                event.preventDefault();
-              }
-            }}
-            className={`rounded-lg border px-3 py-2 text-xs font-bold tracking-widest flex items-center justify-center gap-2 ${
-              hasBlink
-                ? "border-[#00f3ff]/40 bg-[#00f3ff]/10 text-[#8cf8ff] hover:bg-[#00f3ff]/20"
-                : "border-[#00f3ff]/20 bg-[#00f3ff]/5 text-[#8cf8ff]/50 cursor-not-allowed"
-            }`}
-          >
-            <LinkIcon className="w-4 h-4" />
-            OPEN IN SOLFLARE
-          </motion.a>
-        </div>
-
-        <div className="text-[11px] font-mono text-gray-500">
-          Wallet flow: open Blink with Solflare/compatible wallet, review transaction, then approve/sign.
-        </div>
 
         <div className="grid grid-cols-2 gap-2 pt-1">
           <div className="rounded-lg border border-white/10 bg-black/40 px-3 py-2">

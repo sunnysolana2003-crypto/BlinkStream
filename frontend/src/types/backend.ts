@@ -30,6 +30,7 @@ export interface GenerateBlinkInput {
   token: string;
   actionType: string;
   amount?: number;
+  receiver?: string;
 }
 
 export interface OrbitflareMethodUsage {

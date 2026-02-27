@@ -9,7 +9,9 @@ const {
   getBlinksForUser
 } = require("../services/blink.service");
 const { getQuote, getSwapTransaction } = require("../services/jupiter.service");
+const { buildDirectTransferTransaction } = require("../services/transaction.service");
 const logger = require("../utils/logger");
+
 
 const router = express.Router();
 const PUBLIC_USER_ID = process.env.PUBLIC_USER_ID || "public-user";
@@ -268,6 +270,45 @@ router.post("/action", async (req, res, next) => {
       rawAmount: true
     });
 
+    const isDirect = ["donate", "mint"].includes(trade.actionType.toLowerCase());
+
+    // ─── DONATE / MINT: proper on-chain transfer ───────────────────────────────
+    if (isDirect) {
+      const receiver = String(req.query.receiver || "").trim();
+      if (!receiver) {
+        return res.status(400).json({
+          message: `A 'receiver' wallet address is required for the '${trade.actionType}' action type.`
+        });
+      }
+
+      try {
+        new PublicKey(receiver);
+      } catch {
+        return res.status(400).json({ message: "Invalid receiver public key" });
+      }
+
+      let transferResult;
+      try {
+        transferResult = await buildDirectTransferTransaction({
+          senderPubkey: account,
+          receiverPubkey: receiver,
+          inputMint: trade.inputMint,
+          amount: trade.amount
+        });
+      } catch (err) {
+        logger.error(`Direct transfer build failed for ${trade.actionType}:`, err.message);
+        return res.status(502).json({ message: err.message || "Transfer transaction build failed" });
+      }
+
+      const label = trade.actionType === "DONATE" ? "Donation" : "Mint Purchase";
+      return res.json({
+        type: "transaction",
+        transaction: transferResult.transaction,
+        message: `${label} of ${trade.token} via BlinkStream`
+      });
+    }
+
+    // ─── SWAP / BUY / SELL: Jupiter aggregator ────────────────────────────────
     const quoteResult = await getQuote({
       inputMint: trade.inputMint,
       outputMint: trade.outputMint,
@@ -300,6 +341,7 @@ router.post("/action", async (req, res, next) => {
     return next(error);
   }
 });
+
 
 router.post("/", validateBlinkPayload, handleGenerate);
 router.post("/generate", validateBlinkPayload, handleGenerate);
