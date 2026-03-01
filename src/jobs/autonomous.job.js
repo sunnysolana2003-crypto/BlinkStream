@@ -4,6 +4,12 @@ const {
   AUTONOMOUS_POLL_MS,
   SOL_TOKEN
 } = require("../config/constants");
+
+const MINT_ADDRESS_REGEX_ACTIVE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+const SYMBOL_REGEX_ACTIVE = /^[A-Za-z0-9._-]{2,24}$/;
+
+// The single token currently being surge-monitored (mirrors dashboard selection).
+let activeToken = SOL_TOKEN;
 const { getConnection } = require("../config/rpc.config");
 const { getPrice, getDeterministicDemoSurge } = require("../services/price.service");
 const { evaluatePriceSurge } = require("../services/surgeEngine.service");
@@ -15,8 +21,6 @@ const logger = require("../utils/logger");
 let intervalRef = null;
 let lastBlinkTimestamp = 0;
 let cycleRunning = false;
-const MINT_ADDRESS_REGEX = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
-const SYMBOL_REGEX = /^[A-Za-z0-9._-]{2,24}$/;
 
 function normalizeAutonomousToken(value) {
   const raw = String(value || "").trim();
@@ -24,15 +28,35 @@ function normalizeAutonomousToken(value) {
     return "";
   }
 
-  if (MINT_ADDRESS_REGEX.test(raw)) {
+  if (MINT_ADDRESS_REGEX_ACTIVE.test(raw)) {
     return raw;
   }
 
-  if (!SYMBOL_REGEX.test(raw)) {
+  if (!SYMBOL_REGEX_ACTIVE.test(raw)) {
     return "";
   }
 
   return raw.toUpperCase();
+}
+
+/**
+ * Set the single token that the autonomous surge monitor watches.
+ * Called by the frontend whenever the dashboard dropdown changes.
+ */
+function setActiveToken(token) {
+  const normalized = normalizeAutonomousToken(token);
+  if (!normalized) {
+    const error = new Error("Invalid token. Use symbol (e.g., SOL) or valid mint address");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  activeToken = normalized;
+  return activeToken;
+}
+
+function getActiveToken() {
+  return activeToken;
 }
 
 function parseTokenList(value, fallback) {
@@ -48,9 +72,18 @@ function parseTokenList(value, fallback) {
   return fallback;
 }
 
+// Known/supported token list (for the dropdown). Surge only runs on activeToken.
 const autonomousTokenSet = new Set(
-  parseTokenList(process.env.AUTONOMOUS_TOKENS, [SOL_TOKEN, "BTC", "ETH"])
+  parseTokenList(process.env.AUTONOMOUS_TOKENS, [SOL_TOKEN])
 );
+
+// Seed activeToken from the env list (first entry).
+(function seedActiveToken() {
+  const first = Array.from(autonomousTokenSet)[0];
+  if (first) {
+    activeToken = first;
+  }
+}());
 
 function getAutonomousTokens() {
   return Array.from(autonomousTokenSet.values());
@@ -148,14 +181,12 @@ async function runAutonomousCycle(forceDemo = false) {
       });
     }
 
-    for (const token of getAutonomousTokens()) {
-      const price = await getPrice(token);
-      const surge = evaluatePriceSurge(price.price, token, Date.now());
+    // Only poll the single token that the dashboard is currently watching.
+    const token = getActiveToken();
+    const price = await getPrice(token);
+    const surge = evaluatePriceSurge(price.price, token, Date.now());
 
-      if (!surge) {
-        continue;
-      }
-
+    if (surge) {
       const usdValue = Number((Math.abs(surge.changePercent) * 4000).toFixed(2));
       const slot = await getConnection().getSlot();
 
@@ -215,5 +246,7 @@ module.exports = {
   runAutonomousCycle,
   getAutonomousTokens,
   addAutonomousToken,
-  removeAutonomousToken
+  removeAutonomousToken,
+  getActiveToken,
+  setActiveToken
 };

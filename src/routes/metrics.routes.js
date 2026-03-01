@@ -12,7 +12,9 @@ const { getStreamStatus } = require("../jobs/stream.job");
 const {
   getAutonomousTokens,
   addAutonomousToken,
-  removeAutonomousToken
+  removeAutonomousToken,
+  getActiveToken,
+  setActiveToken
 } = require("../jobs/autonomous.job");
 const { getWalletPortfolio } = require("../services/portfolio.service");
 const { inspectTransaction } = require("../services/txInspector.service");
@@ -80,6 +82,25 @@ router.delete("/autonomous-tokens", async (req, res, next) => {
 
     const tokens = removeAutonomousToken(token);
     return res.json({ success: true, tokens });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// ─── Active token (single token the surge monitor watches) ───────────────────
+router.get("/autonomous-tokens/active", (req, res) => {
+  return res.json({ token: getActiveToken() });
+});
+
+router.put("/autonomous-tokens/active", async (req, res, next) => {
+  try {
+    const token = String(req.body?.token || req.query?.token || "").trim();
+    if (!token) {
+      return res.status(400).json({ error: "token is required" });
+    }
+
+    const active = setActiveToken(token);
+    return res.json({ success: true, token: active });
   } catch (error) {
     return next(error);
   }

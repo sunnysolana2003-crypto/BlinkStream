@@ -413,6 +413,13 @@ export default function App() {
     };
   }, [handleApiError, selectedToken]);
 
+  // Keep backend surge monitor in sync with dashboard token selection.
+  useEffect(() => {
+    void api.put("/metrics/autonomous-tokens/active", { token: selectedToken }).catch(() => {
+      // Best-effort — don't surface errors from this sync in the UI.
+    });
+  }, [selectedToken]);
+
   const refreshHealth = useCallback(async () => {
     try {
       const response = await api.get("/health");
